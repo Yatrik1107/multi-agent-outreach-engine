@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Lead Qualifier</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #1a1a1a; background: #f4f4f5; }
+    body { margin: 0; max-width: 1100px; margin-inline: auto; padding: 1rem 1.25rem 2rem; }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    p.sub { margin: 0 0 1rem; color: #52525b; font-size: 0.9rem; }
+    nav { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    nav button {
+      border: 1px solid #d4d4d8; background: #fff; padding: 0.45rem 0.9rem;
+      border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    }
+    nav button.active { background: #18181b; color: #fff; border-color: #18181b; }
+    section.panel {
+      display: none; background: #fff; border: 1px solid #e4e4e7;
+      border-radius: 8px; padding: 1rem 1.1rem;
+    }
+    section.panel.visible { display: block; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+    input[type="file"] { font-size: 0.85rem; }
+    button.primary {
+      background: #2563eb; color: #fff; border: none; padding: 0.5rem 1rem;
+      border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    }
+    button.primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    .err { color: #b91c1c; font-size: 0.85rem; white-space: pre-wrap; }
+    .ok { color: #15803d; font-size: 0.85rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.5rem; }
+    th, td { border: 1px solid #e4e4e7; padding: 0.35rem 0.45rem; vertical-align: top; text-align: left; }
+    th { background: #fafafa; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    details { margin-top: 0.25rem; }
+    #chat-log {
+      border: 1px solid #e4e4e7; border-radius: 6px; height: 280px; overflow-y: auto;
+      padding: 0.5rem 0.65rem; background: #fafafa; font-size: 0.88rem; margin-bottom: 0.5rem;
+    }
+    .bubble { margin: 0.35rem 0; padding: 0.35rem 0.5rem; border-radius: 6px; max-width: 95%; }
+    .bubble.user { background: #dbeafe; margin-left: 1.5rem; }
+    .bubble.assistant { background: #fff; border: 1px solid #e4e4e7; margin-right: 1.5rem; }
+    .bubble .meta { font-size: 0.72rem; color: #71717a; margin-bottom: 0.15rem; }
+    #chat-input {
+      width: 100%; box-sizing: border-box; padding: 0.5rem; border-radius: 6px;
+      border: 1px solid #d4d4d8; font-size: 0.9rem; margin-bottom: 0.35rem;
+    }
+    textarea { width: 100%; box-sizing: border-box; min-height: 4rem; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+  <h1>Smart Lead Qualifier &amp; Outreach</h1>
+  <p class="sub">Upload a CSV (Leads) or use the Assistant (Chat). API: <code>/api/v1</code></p>
+
+  <nav>
+    <button type="button" class="tab active" data-tab="leads">Leads</button>
+    <button type="button" class="tab" data-tab="chat">Assistant</button>
+  </nav>
+
+  <section id="panel-leads" class="panel visible">
+    <div class="row">
+      <input type="file" id="csv-file" accept=".csv,text/csv" />
+      <button type="button" class="primary" id="btn-process">Run pipeline</button>
+    </div>
+    <div id="leads-status" class="err"></div>
+    <div id="leads-errors" class="err"></div>
+    <div id="leads-table-wrap"></div>
+  </section>
+
+  <section id="panel-chat" class="panel">
+    <p class="sub" style="margin-top:0">Session is kept in <code>localStorage</code> for this browser.</p>
+    <div id="chat-log"></div>
+    <textarea id="chat-input" placeholder="Message the assistant…"></textarea>
+    <div class="row">
+      <button type="button" class="primary" id="btn-send">Send</button>
+      <button type="button" id="btn-new-session">New session</button>
+    </div>
+    <div id="chat-status" class="err"></div>
+  </section>
+
+  <script>
+    const API = "/api/v1";
+    const LS_KEY = "smartlead_chat_session_id";
+
+    function tabSwitch(name) {
+      document.querySelectorAll(".tab").forEach((b) => {
+        b.classList.toggle("active", b.dataset.tab === name);
+      });
+      document.getElementById("panel-leads").classList.toggle("visible", name === "leads");
+      document.getElementById("panel-chat").classList.toggle("visible", name === "chat");
+    }
+    document.querySelectorAll(".tab").forEach((b) => {
+      b.addEventListener("click", () => tabSwitch(b.dataset.tab));
+    });
+
+    /* ----- Leads ----- */
+    const leadsStatus = document.getElementById("leads-status");
+    const leadsErrors = document.getElementById("leads-errors");
+    const leadsWrap = document.getElementById("leads-table-wrap");
+
+    document.getElementById("btn-process").addEventListener("click", async () => {
+      leadsStatus.textContent = "";
+      leadsErrors.textContent = "";
+      leadsWrap.innerHTML = "";
+      const input = document.getElementById("csv-file");
+      if (!input.files || !input.files[0]) {
+        leadsStatus.textContent = "Choose a CSV file first.";
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", input.files[0]);
+      const btn = document.getElementById("btn-process");
+      btn.disabled = true;
+      leadsStatus.textContent = "Processing…";
+      try {
+        const res = await fetch(API + "/leads/process", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          leadsStatus.textContent = res.status + " " + res.statusText;
+          leadsErrors.textContent = typeof data.detail === "string"
+            ? data.detail
+            : JSON.stringify(data.detail || data, null, 2);
+          return;
+        }
+        leadsStatus.textContent = "Done (" + data.leads.length + " lead(s)).";
+        leadsStatus.className = "ok";
+        if (data.errors && data.errors.length) {
+          leadsErrors.textContent = "Warnings:\n" + data.errors.join("\n");
+        }
+        const rows = (data.leads || []).map((r) => {
+          const L = r.lead || {};
+          const R = r.research || {};
+          const S = r.score || {};
+          const O = r.outreach || {};
+          return `<tr>
+            <td>${escapeHtml(L.company_name || "")}</td>
+            <td>${escapeHtml(L.website || "")}</td>
+            <td>${escapeHtml(R.industry || "")}</td>
+            <td class="num">${escapeHtml(String(S.score ?? ""))}</td>
+            <td>${escapeHtml(O.subject || "")}</td>
+            <td>
+              <details><summary>Body</summary><pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(O.body || "")}</pre></details>
+              <details><summary>Research</summary><pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(JSON.stringify(R, null, 2))}</pre></details>
+              <details><summary>Score detail</summary><pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(S.rationale || "")}</pre></details>
+            </td>
+          </tr>`;
+        }).join("");
+        leadsWrap.innerHTML = `<table><thead><tr>
+          <th>Company</th><th>Website</th><th>Industry</th><th>Score</th><th>Email subject</th><th>Details</th>
+        </tr></thead><tbody>${rows}</tbody></table>`;
+      } catch (e) {
+        leadsStatus.textContent = "Request failed.";
+        leadsErrors.textContent = String(e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    /* ----- Chat ----- */
+    const chatLog = document.getElementById("chat-log");
+    const chatInput = document.getElementById("chat-input");
+    const chatStatus = document.getElementById("chat-status");
+
+    function appendBubble(role, text) {
+      const div = document.createElement("div");
+      div.className = "bubble " + (role === "user" ? "user" : "assistant");
+      div.innerHTML = `<div class="meta">${role}</div><div>${escapeHtml(text).replace(/\n/g, "<br/>")}</div>`;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    async function ensureSession() {
+      let sid = localStorage.getItem(LS_KEY);
+      if (sid) return sid;
+      const res = await fetch(API + "/chat/sessions", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(JSON.stringify(data));
+      sid = data.session_id;
+      localStorage.setItem(LS_KEY, sid);
+      return sid;
+    }
+
+    document.getElementById("btn-new-session").addEventListener("click", async () => {
+      localStorage.removeItem(LS_KEY);
+      chatLog.innerHTML = "";
+      chatStatus.textContent = "";
+      try {
+        await ensureSession();
+        chatStatus.textContent = "New session ready.";
+        chatStatus.className = "ok";
+      } catch (e) {
+        chatStatus.textContent = String(e);
+      }
+    });
+
+    document.getElementById("btn-send").addEventListener("click", sendChat);
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
+    });
+
+    async function sendChat() {
+      chatStatus.textContent = "";
+      const text = chatInput.value.trim();
+      if (!text) return;
+      chatInput.value = "";
+      appendBubble("user", text);
+      const btn = document.getElementById("btn-send");
+      btn.disabled = true;
+      try {
+        const sid = await ensureSession();
+        const res = await fetch(API + "/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sid, message: text }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          chatStatus.textContent = typeof data.detail === "string"
+            ? data.detail
+            : JSON.stringify(data.detail || data);
+          return;
+        }
+        appendBubble("assistant", data.reply || "");
+      } catch (e) {
+        chatStatus.textContent = String(e);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
