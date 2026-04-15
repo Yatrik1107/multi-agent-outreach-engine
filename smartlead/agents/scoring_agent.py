@@ -3,7 +3,7 @@ import json
 
 from smartlead.api.v1.schemas.leads import LeadInput, ResearchResult, ScoreResult
 from smartlead.core.settings import Settings
-from smartlead.services.gemini_llm import GeminiLLM
+from smartlead.services.llm_factory import get_llm
 from smartlead.services.icp import ICP
 
 
@@ -28,7 +28,7 @@ class ScoringAgent:
             ]
             return ScoreResult(score=score, rationale=" ".join(rationale_parts).strip())
 
-        llm = GeminiLLM(self.settings)
+        llm = get_llm(self.settings)
         system = (
             "You score how well a lead fits an Ideal Customer Profile (ICP). "
             "Be conservative if research quality is weak. "

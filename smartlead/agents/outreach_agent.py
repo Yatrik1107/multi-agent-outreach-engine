@@ -8,7 +8,7 @@ from smartlead.api.v1.schemas.leads import (
     ScoreResult,
 )
 from smartlead.core.settings import Settings
-from smartlead.services.gemini_llm import GeminiLLM
+from smartlead.services.llm_factory import get_llm
 
 
 @dataclass
@@ -34,7 +34,7 @@ class OutreachAgent:
             )
             return OutreachDraft(subject=subject, body=body)
 
-        llm = GeminiLLM(self.settings)
+        llm = get_llm(self.settings)
         system = (
             "You write a short, personalized B2B outreach email. "
             "Be professional, specific, and non-spammy. No fabricated metrics or claims not supported "

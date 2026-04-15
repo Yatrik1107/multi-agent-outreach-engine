@@ -5,8 +5,15 @@ from smartlead.core.settings import Settings, get_settings
 from smartlead.services.csv_ingest import parse_leads_csv
 from smartlead.services.icp import get_default_icp
 from smartlead.services.pipeline import run_pipeline
+from smartlead.services.pipeline_context import last_run_summary, set_last_lead_results
 
 router = APIRouter(prefix="/leads", tags=["leads"])
+
+
+@router.get("/context")
+def get_pipeline_context_status() -> dict[str, bool | int]:
+    """Whether the server has a last completed run (for UI hints)."""
+    return last_run_summary()
 
 
 @router.post("/process", response_model=LeadsProcessResponse)
@@ -17,10 +24,10 @@ async def process_leads_csv(
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a .csv file.")
 
-    if not settings.use_mock_llm and not (settings.gemini_api_key or "").strip():
+    if not settings.use_mock_llm and not settings.has_active_llm_credentials:
         raise HTTPException(
             status_code=503,
-            detail="Live mode requires GEMINI_API_KEY (or GOOGLE_API_KEY). Or set USE_MOCK_LLM=true.",
+            detail=settings.live_llm_config_error_detail(),
         )
 
     leads, parse_errors = await parse_leads_csv(file)
@@ -35,5 +42,7 @@ async def process_leads_csv(
         results = run_pipeline(leads, icp, settings)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Pipeline error: {exc}") from exc
+
+    set_last_lead_results(results)
 
     return LeadsProcessResponse(leads=results, errors=parse_errors)

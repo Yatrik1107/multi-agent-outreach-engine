@@ -70,6 +70,10 @@
 
   <section id="panel-chat" class="panel">
     <p class="sub" style="margin-top:0">Session is kept in <code>localStorage</code> for this browser.</p>
+    <label style="font-size:0.85rem;display:flex;gap:0.35rem;align-items:center;margin:0 0 0.5rem;">
+        <input type="checkbox" id="use-pipeline-ctx" checked />
+        Include last lead run in assistant context (server memory)
+    </label>
     <div id="chat-log"></div>
     <textarea id="chat-input" placeholder="Message the assistant…"></textarea>
     <div class="row">
@@ -220,10 +224,15 @@
       btn.disabled = true;
       try {
         const sid = await ensureSession();
+        const useCtx = document.getElementById("use-pipeline-ctx").checked;
         const res = await fetch(API + "/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sid, message: text }),
+          body: JSON.stringify({
+            session_id: sid,
+            message: text,
+            use_pipeline_context: useCtx,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {

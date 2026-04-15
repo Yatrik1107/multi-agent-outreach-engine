@@ -19,6 +19,8 @@ class ChatSessionCreateResponse(BaseModel):
 class ChatMessageCreate(BaseModel):
     session_id: str | None = None
     message: str = Field(..., min_length=1, max_length=8000)
+    # When true, the assistant sees the last successful /leads/process output (server-side).
+    use_pipeline_context: bool = True
 
 
 class ChatTurnResponse(BaseModel):

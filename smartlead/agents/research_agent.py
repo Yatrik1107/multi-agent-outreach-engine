@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from smartlead.api.v1.schemas.leads import LeadInput, ResearchResult
 from smartlead.core.settings import Settings
-from smartlead.services.gemini_llm import GeminiLLM
+from smartlead.services.llm_factory import get_llm
 from smartlead.services.tavily_search import fetch_search_context
 
 
@@ -23,7 +23,7 @@ class ResearchAgent:
                 ),
             )
 
-        llm = GeminiLLM(self.settings)
+        llm = get_llm(self.settings)
         query = f"{lead.company_name} company official website industry employees news"
         web_block = fetch_search_context(self.settings, query)
         if web_block:

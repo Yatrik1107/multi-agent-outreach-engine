@@ -9,6 +9,7 @@ from smartlead.api.v1.schemas.chat import (
 )
 from smartlead.core.settings import Settings, get_settings
 from smartlead.services.chat_session import ChatSessionStore, get_chat_session_store
+from smartlead.services.pipeline_context import format_pipeline_context_for_prompt
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -26,10 +27,10 @@ def send_message(
     store: ChatSessionStore = Depends(get_chat_session_store),
     settings: Settings = Depends(get_settings),
 ) -> ChatTurnResponse:
-    if not settings.use_mock_llm and not (settings.gemini_api_key or "").strip():
+    if not settings.use_mock_llm and not settings.has_active_llm_credentials:
         raise HTTPException(
             status_code=503,
-            detail="Live mode requires GEMINI_API_KEY (or GOOGLE_API_KEY). Or set USE_MOCK_LLM=true.",
+            detail=settings.live_llm_config_error_detail(),
         )
 
     if body.session_id is None:
@@ -46,9 +47,17 @@ def send_message(
         for m in store.history(session_id)
     ]
 
+    pipeline_context: str | None = None
+    if body.use_pipeline_context:
+        pipeline_context = format_pipeline_context_for_prompt()
+
     try:
         agent = ChatAgent(settings=settings)
-        reply_text = agent.reply(body.message, history_before_reply)
+        reply_text = agent.reply(
+            body.message,
+            history_before_reply,
+            pipeline_context=pipeline_context,
+        )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Chat model error: {exc}") from exc
 
