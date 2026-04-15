@@ -116,6 +116,7 @@
       document.getElementById("panel-chat").classList.toggle("visible", name === "chat");
       document.getElementById("panel-icp").classList.toggle("visible", name === "icp");
     }
+  
     document.querySelectorAll(".tab").forEach((b) => {
       b.addEventListener("click", () => tabSwitch(b.dataset.tab));
     });
@@ -157,6 +158,7 @@
   
       const btn = document.getElementById("btn-process");
       btn.disabled = true;
+  
       leadsStatus.textContent = "Streaming…";
       progressBar.textContent = "Starting…";
   
@@ -184,7 +186,6 @@
           buf += dec.decode(value, { stream: true });
   
           buf = parseSseBuffer(buf, (ev) => {
-  
             if (ev.event === "start") {
               progressBar.textContent = `Processing ${ev.total} lead(s)…`;
             }
@@ -205,12 +206,12 @@
                 leadsErrors.textContent = "Warnings:\n" + ev.errors.join("\n");
               }
             }
-  
           });
         }
   
-        // build table (unchanged)
-        const htmlRows = rows.map((r) => {
+        /* ---------------- TABLE BUILD ---------------- */
+  
+        const htmlRows = rows.map((r, i) => {
           const L = r.lead || {};
           const R = r.research || {};
           const S = r.score || {};
@@ -223,16 +224,118 @@
             <td class="num">${escapeHtml(String(S.score ?? ""))}</td>
             <td>${escapeHtml(O.subject || "")}</td>
             <td>
-              <details><summary>Body</summary><pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(O.body || "")}</pre></details>
-              <details><summary>Research</summary><pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(JSON.stringify(R, null, 2))}</pre></details>
-              <details><summary>Score detail</summary><pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(S.rationale || "")}</pre></details>
+              <details><summary>Body</summary>
+                <pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(O.body || "")}</pre>
+              </details>
+              <details><summary>Research</summary>
+                <pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(JSON.stringify(R, null, 2))}</pre>
+              </details>
+              <details><summary>Score detail</summary>
+                <pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(S.rationale || "")}</pre>
+              </details>
+            </td>
+  
+            <td class="send-cell">
+              <button type="button"
+                class="send-outreach-btn"
+                data-lead-index="${i}"
+                ${!(L.contact_email || "").trim()
+                  ? 'title="No email in CSV — you will be prompted"'
+                  : ""}>
+                Send email
+              </button>
+              <span class="send-outreach-status"
+                data-lead-index="${i}"
+                style="font-size:0.75rem;margin-left:0.35rem;"></span>
             </td>
           </tr>`;
         }).join("");
   
-        leadsWrap.innerHTML = `<table><thead><tr>
-          <th>Company</th><th>Website</th><th>Industry</th><th>Score</th><th>Email subject</th><th>Details</th>
-        </tr></thead><tbody>${htmlRows}</tbody></table>`;
+        leadsWrap.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Website</th>
+                <th>Industry</th>
+                <th>Score</th>
+                <th>Email subject</th>
+                <th>Details</th>
+                <th>Send</th>
+              </tr>
+            </thead>
+            <tbody>${htmlRows}</tbody>
+          </table>
+        `;
+  
+        /* ---------------- SEND EMAIL HANDLERS ---------------- */
+  
+        let mailConfigured = false;
+        try {
+          const st = await fetch(API + "/leads/outreach-mail-status").then((r) => r.json());
+          mailConfigured = !!st.configured;
+        } catch {}
+  
+        leadsWrap.querySelectorAll(".send-outreach-btn").forEach((btn) => {
+          if (!mailConfigured) {
+            btn.disabled = true;
+            btn.title = "Set SENDER_EMAIL and GMAIL_SMTP_KEY on the server.";
+            return;
+          }
+  
+          btn.addEventListener("click", async () => {
+            const idx = parseInt(btn.getAttribute("data-lead-index"), 10);
+  
+            const statusEl = leadsWrap.querySelector(
+              `.send-outreach-status[data-lead-index="${idx}"]`
+            );
+  
+            const row = rows[idx];
+            const ce = (row.lead && row.lead.contact_email) || "";
+  
+            let toEmail = null;
+  
+            if (!ce.trim()) {
+              toEmail = window.prompt("Recipient email (not in CSV):");
+              if (!toEmail || !toEmail.trim()) {
+                if (statusEl) statusEl.textContent = "Cancelled.";
+                return;
+              }
+            }
+  
+            btn.disabled = true;
+            if (statusEl) statusEl.textContent = "Sending…";
+  
+            try {
+              const payload = { lead_index: idx };
+              if (toEmail) payload.to_email = toEmail.trim();
+  
+              const res = await fetch(API + "/leads/send-outreach-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+  
+              const data = await res.json().catch(() => ({}));
+  
+              if (!res.ok) {
+                throw new Error(
+                  typeof data.detail === "string"
+                    ? data.detail
+                    : JSON.stringify(data.detail || data)
+                );
+              }
+  
+              if (statusEl) statusEl.textContent = "Sent ✓";
+  
+            } catch (e) {
+              if (statusEl) statusEl.textContent = "Failed";
+              alert(String(e));
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
   
         leadsStatus.textContent = "Done (" + rows.length + " lead(s)).";
         leadsStatus.className = "ok";
@@ -270,46 +373,34 @@
     async function ensureSession() {
       let sid = localStorage.getItem(LS_KEY);
       if (sid) return sid;
+  
       const res = await fetch(API + "/chat/sessions", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(JSON.stringify(data));
+  
       sid = data.session_id;
       localStorage.setItem(LS_KEY, sid);
       return sid;
     }
   
-    document.getElementById("btn-new-session").addEventListener("click", async () => {
-      localStorage.removeItem(LS_KEY);
-      chatLog.innerHTML = "";
-      chatStatus.textContent = "";
-      try {
-        await ensureSession();
-        chatStatus.textContent = "New session ready.";
-        chatStatus.className = "ok";
-      } catch (e) {
-        chatStatus.textContent = String(e);
-      }
-    });
-  
     document.getElementById("btn-send").addEventListener("click", sendChat);
-    chatInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendChat();
-      }
-    });
   
     async function sendChat() {
       chatStatus.textContent = "";
+  
       const text = chatInput.value.trim();
       if (!text) return;
+  
       chatInput.value = "";
       appendBubble("user", text);
+  
       const btn = document.getElementById("btn-send");
       btn.disabled = true;
+  
       try {
         const sid = await ensureSession();
         const useCtx = document.getElementById("use-pipeline-ctx").checked;
+  
         const res = await fetch(API + "/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -319,13 +410,17 @@
             use_pipeline_context: useCtx,
           }),
         });
+  
         const data = await res.json().catch(() => ({}));
+  
         if (!res.ok) {
-          chatStatus.textContent = typeof data.detail === "string"
-            ? data.detail
-            : JSON.stringify(data.detail || data);
+          chatStatus.textContent =
+            typeof data.detail === "string"
+              ? data.detail
+              : JSON.stringify(data.detail || data);
           return;
         }
+  
         appendBubble("assistant", data.reply || "");
       } catch (e) {
         chatStatus.textContent = String(e);
@@ -343,13 +438,20 @@
   
     async function loadIcp() {
       icpStatus.textContent = "";
+  
       try {
         const res = await fetch(API + "/icp");
         const data = await res.json();
         if (!res.ok) throw new Error(JSON.stringify(data));
-        document.getElementById("icp-industries").value = (data.target_industries || []).join(", ");
-        document.getElementById("icp-keywords").value = (data.keywords || []).join(", ");
+  
+        document.getElementById("icp-industries").value =
+          (data.target_industries || []).join(", ");
+  
+        document.getElementById("icp-keywords").value =
+          (data.keywords || []).join(", ");
+  
         document.getElementById("icp-notes").value = data.notes || "";
+  
         icpStatus.textContent = "Loaded.";
         icpStatus.className = "ok";
       } catch (e) {
@@ -362,21 +464,26 @@
   
     document.getElementById("btn-icp-save").addEventListener("click", async () => {
       icpStatus.textContent = "";
+  
       const body = {
         target_industries: splitList(document.getElementById("icp-industries").value),
         keywords: splitList(document.getElementById("icp-keywords").value),
         notes: document.getElementById("icp-notes").value.trim(),
       };
+  
       try {
         const res = await fetch(API + "/icp", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+  
         const data = await res.json();
         if (!res.ok) throw new Error(JSON.stringify(data));
+  
         icpStatus.textContent = "Saved.";
         icpStatus.className = "ok";
+  
       } catch (e) {
         icpStatus.textContent = String(e);
         icpStatus.className = "err";
@@ -385,15 +492,23 @@
   
     document.getElementById("btn-icp-reset").addEventListener("click", async () => {
       icpStatus.textContent = "";
+  
       try {
         const res = await fetch(API + "/icp/reset", { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(JSON.stringify(data));
-        document.getElementById("icp-industries").value = (data.target_industries || []).join(", ");
-        document.getElementById("icp-keywords").value = (data.keywords || []).join(", ");
+  
+        document.getElementById("icp-industries").value =
+          (data.target_industries || []).join(", ");
+  
+        document.getElementById("icp-keywords").value =
+          (data.keywords || []).join(", ");
+  
         document.getElementById("icp-notes").value = data.notes || "";
+  
         icpStatus.textContent = "Reset to defaults.";
         icpStatus.className = "ok";
+  
       } catch (e) {
         icpStatus.textContent = String(e);
         icpStatus.className = "err";

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # True = no external LLM (demo text).
     use_mock_llm: bool = True
 
-    # "gemini" | "openai" (case-insensitive). Controls which API key is required when USE_MOCK_LLM=false.
+    # "gemini" | "openai" | "grok" (case-insensitive). Controls which API key is required when USE_MOCK_LLM=false.
     llm_provider: str = "gemini"
 
     # --- Google Gemini ---
@@ -36,27 +36,43 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENAI_API_KEY", "OPENAPI_API_KEY"),
     )
     openai_model: str = "gpt-4o-mini"
+    
+    # --- xAI Grok (optional LLM; OpenAI-compatible base URL) ---
+    grok_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GROK_API_KEY", "XAI_API_KEY"),
+    )
+    grok_model: str = "grok-4-1-fast-non-reasoning"
 
     tavily_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("TAVILY_API_KEY"),
     )
+    
     # Sign-off for outreach emails (optional).
     outreach_sender_name: str = ""
     outreach_sender_role: str = ""
     outreach_sender_company: str = ""
+    
+     # --- Gmail SMTP ---
+    sender_email: str = ""
+    gmail_smtp_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("GMAIL_SMTP_KEY", "GMAIL_APP_PASSWORD"),
+    )
 
     def _provider_normalized(self) -> str:
         return (self.llm_provider or "gemini").strip().lower()
 
     @property
     def has_active_llm_credentials(self) -> bool:
-        """Non-empty API key for the selected LLM_PROVIDER."""
         p = self._provider_normalized()
         if p == "openai":
             return bool((self.openai_api_key or "").strip())
         if p == "gemini":
             return bool((self.gemini_api_key or "").strip())
+        if p == "grok":
+            return bool((self.grok_api_key or "").strip())
         return False
 
     @property
@@ -94,11 +110,21 @@ class Settings(BaseSettings):
                 "LLM_PROVIDER=gemini requires GEMINI_API_KEY or GOOGLE_API_KEY. "
                 "Or set USE_MOCK_LLM=true."
             )
+        if p == "grok":
+            return (
+                "LLM_PROVIDER=grok requires GROK_API_KEY (or XAI_API_KEY). "
+                "Or set USE_MOCK_LLM=true."
+            )
         return (
-            f"Unknown LLM_PROVIDER={self.llm_provider!r}. Use 'gemini' or 'openai'. "
+            f"Unknown LLM_PROVIDER={self.llm_provider!r}. Use 'gemini', 'openai', or 'grok'. "
             "Or set USE_MOCK_LLM=true."
         )
-
+        
+    @property
+    def gmail_outreach_configured(self) -> bool:
+        return bool(
+            (self.sender_email or "").strip() and (self.gmail_smtp_key or "").strip(),
+        )
 
 @lru_cache
 def get_settings() -> Settings:

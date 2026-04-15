@@ -1,5 +1,4 @@
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, Field, EmailStr
 
 class LeadInput(BaseModel):
     company_name: str = Field(..., min_length=1, max_length=200)
@@ -34,3 +33,13 @@ class LeadResult(BaseModel):
 class LeadsProcessResponse(BaseModel):
     leads: list[LeadResult]
     errors: list[str] = Field(default_factory=list)
+    
+class SendOutreachEmailRequest(BaseModel):
+    lead_index: int = Field(..., ge=0)
+    to_email: EmailStr | None = None
+
+
+class SendOutreachEmailResponse(BaseModel):
+    ok: bool = True
+    to: str
+    message: str = "Email sent."
