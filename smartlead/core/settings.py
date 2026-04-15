@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("TAVILY_API_KEY"),
     )
+    # Sign-off for outreach emails (optional).
+    outreach_sender_name: str = ""
+    outreach_sender_role: str = ""
+    outreach_sender_company: str = ""
 
     def _provider_normalized(self) -> str:
         return (self.llm_provider or "gemini").strip().lower()
@@ -62,6 +66,21 @@ class Settings(BaseSettings):
     @property
     def tavily_configured(self) -> bool:
         return bool((self.tavily_api_key or "").strip())
+    
+    def outreach_signature_block(self) -> str | None:
+        name = (self.outreach_sender_name or "").strip()
+        role = (self.outreach_sender_role or "").strip()
+        company = (self.outreach_sender_company or "").strip()
+        if not name and not role and not company:
+            return None
+        lines = ["Best regards,"]
+        if name:
+            lines.append(name)
+        if role:
+            lines.append(role)
+        if company:
+            lines.append(company)
+        return "\n".join(lines)
 
     def live_llm_config_error_detail(self) -> str:
         p = self._provider_normalized()

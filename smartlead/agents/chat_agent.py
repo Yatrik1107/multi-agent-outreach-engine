@@ -18,8 +18,8 @@ class ChatAgent:
         if not self.settings.live_llm:
             base = (
                 "Thanks for your message (demo mode). I'm the Smart Lead Assistant. "
-                "Upload a CSV on the Leads tab, then ask about scores or drafts. "
-                "Set USE_MOCK_LLM=false and GEMINI_API_KEY for live Gemini."
+                "Configure ICP under the ICP tab, upload leads, then ask about scores. "
+                "Set USE_MOCK_LLM=false and an API key for live LLM."
             )
             if pipeline_context:
                 return (
@@ -31,12 +31,15 @@ class ChatAgent:
         llm = get_llm(self.settings)
         system = (
             "You are the Smart Lead Qualifier assistant for a B2B sales POC. "
-            "Be concise, professional, and helpful. You can explain: CSV upload for leads, "
-            "research/scoring/outreach pipeline, and ICP concepts. "
-            "When CONTEXT from the last pipeline run is provided below, use it to answer "
-            "questions about specific companies, scores, email drafts, and research fields. "
-            "If the user asks about leads but no CONTEXT is present, say they should run "
-            "the pipeline on the Leads tab first. No harmful content."
+            "Be concise, professional, and helpful.\n"
+            "Rules:\n"
+            "1) If the user message block contains PIPELINE_SUMMARY with lead_count >= 1, "
+            "you already have processed leads on the server. Answer using companies_in_order "
+            "and scores. Never tell the user to run the pipeline for questions about that data.\n"
+            "2) If there is no pipeline run (no PIPELINE_SUMMARY or lead_count 0) and the user "
+            "asks about their scored leads, say they should run the pipeline on the Leads tab.\n"
+            "3) When CURRENT_ICP appears, use it to explain fit vs scoring rationale.\n"
+            "No harmful content."
         )
         transcript_lines: list[str] = []
         for m in history[-24:]:
@@ -50,14 +53,15 @@ class ChatAgent:
         ctx_block = ""
         if pipeline_context:
             ctx_block = (
-                "CONTEXT (last successful lead pipeline run on this server):\n"
+                "CONTEXT (pipeline + ICP; authoritative for lead lists and scores):\n"
                 f"{pipeline_context}\n\n---\n\n"
             )
 
         user_block = (
             f"{ctx_block}"
             f"Conversation so far:\n{transcript}\n\n"
-            f"USER: {user_text}\n\n"
+            f"Latest user request: {user_text}\n\n"
             "Reply as ASSISTANT (plain text, no role labels)."
         )
-        return llm.generate_text(system=system, user=user_block, temperature=0.7)
+        temp = 0.35 if pipeline_context else 0.7
+        return llm.generate_text(system=system, user=user_block, temperature=temp)

@@ -1,14 +1,21 @@
+import json
+
+from fastapi.responses import StreamingResponse
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from smartlead.api.v1.schemas.leads import LeadsProcessResponse
+from smartlead.api.v1.schemas.leads import LeadsProcessResponse, LeadResult
 from smartlead.core.settings import Settings, get_settings
-from smartlead.services.csv_ingest import parse_leads_csv
-from smartlead.services.icp import get_default_icp
-from smartlead.services.pipeline import run_pipeline
+from smartlead.services.csv_ingest import parse_leads_csv, parse_leads_csv_bytes
+from smartlead.services.icp_store import get_active_icp
+from smartlead.services.pipeline import run_pipeline, iter_pipeline_events
 from smartlead.services.pipeline_context import last_run_summary, set_last_lead_results
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
+
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 @router.get("/context")
 def get_pipeline_context_status() -> dict[str, bool | int]:
@@ -37,7 +44,7 @@ async def process_leads_csv(
             detail={"message": "No valid leads parsed.", "errors": parse_errors},
         )
 
-    icp = get_default_icp()
+    icp = get_active_icp()
     try:
         results = run_pipeline(leads, icp, settings)
     except Exception as exc:  # noqa: BLE001
@@ -46,3 +53,49 @@ async def process_leads_csv(
     set_last_lead_results(results)
 
     return LeadsProcessResponse(leads=results, errors=parse_errors)
+
+@router.post("/process-stream")
+async def process_leads_csv_stream(
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings),
+) -> StreamingResponse:
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file.")
+
+    if not settings.use_mock_llm and not settings.has_active_llm_credentials:
+        raise HTTPException(
+            status_code=503,
+            detail=settings.live_llm_config_error_detail(),
+        )
+
+    raw = await file.read()
+    leads, parse_errors = parse_leads_csv_bytes(raw)
+    if not leads:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "No valid leads parsed.", "errors": parse_errors},
+        )
+
+    icp = get_active_icp()
+
+    def event_generator():
+        collected: list[LeadResult] = []
+        try:
+            for ev in iter_pipeline_events(leads, icp, settings, parse_errors):
+                if ev.get("event") == "lead" and "data" in ev:
+                    collected.append(LeadResult.model_validate(ev["data"]))
+                yield _sse(ev)
+                if ev.get("event") == "complete":
+                    set_last_lead_results(collected)
+        except Exception as exc:  # noqa: BLE001
+            yield _sse({"event": "error", "message": str(exc)})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

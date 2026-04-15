@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from smartlead.agents.chat_agent import ChatAgent
@@ -9,6 +11,7 @@ from smartlead.api.v1.schemas.chat import (
 )
 from smartlead.core.settings import Settings, get_settings
 from smartlead.services.chat_session import ChatSessionStore, get_chat_session_store
+from smartlead.services.icp_store import get_active_icp
 from smartlead.services.pipeline_context import format_pipeline_context_for_prompt
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -50,6 +53,15 @@ def send_message(
     pipeline_context: str | None = None
     if body.use_pipeline_context:
         pipeline_context = format_pipeline_context_for_prompt()
+        icp = get_active_icp()
+        icp_block = (
+            "CURRENT_ICP (active on server; used when scoring leads in the pipeline):\n"
+            + json.dumps(icp.model_dump(), ensure_ascii=False)
+        )
+        if pipeline_context:
+            pipeline_context = pipeline_context + "\n\n---\n\n" + icp_block
+        else:
+            pipeline_context = icp_block
 
     try:
         agent = ChatAgent(settings=settings)

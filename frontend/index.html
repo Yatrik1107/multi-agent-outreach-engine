@@ -56,6 +56,7 @@
   <nav>
     <button type="button" class="tab active" data-tab="leads">Leads</button>
     <button type="button" class="tab" data-tab="chat">Assistant</button>
+    <button type="button" class="tab" data-tab="icp">ICP</button>
   </nav>
 
   <section id="panel-leads" class="panel visible">
@@ -65,6 +66,7 @@
     </div>
     <div id="leads-status" class="err"></div>
     <div id="leads-errors" class="err"></div>
+    <div id="leads-progress-bar" aria-live="polite"></div>
     <div id="leads-table-wrap"></div>
   </section>
 
@@ -83,60 +85,137 @@
     <div id="chat-status" class="err"></div>
   </section>
 
+  <section id="panel-icp" class="panel">
+    <p class="sub" style="margin-top:0">
+      Ideal Customer Profile used for <strong>scoring</strong>. In-memory until server restart.
+    </p>
+    <div class="row">
+      <button type="button" class="primary" id="btn-icp-load">Load current</button>
+      <button type="button" class="primary" id="btn-icp-save">Save</button>
+      <button type="button" id="btn-icp-reset">Reset to default</button>
+    </div>
+    <label style="font-size:0.85rem;">Target industries (comma-separated)</label>
+    <textarea id="icp-industries" placeholder="Software, SaaS, …"></textarea>
+    <label style="font-size:0.85rem;">Keywords (comma-separated)</label>
+    <textarea id="icp-keywords" placeholder="cloud, API, …"></textarea>
+    <label style="font-size:0.85rem;">Notes</label>
+    <textarea id="icp-notes" placeholder="Who you sell to…"></textarea>
+    <div id="icp-status" class="err"></div>
+  </section>
+
+
   <script>
     const API = "/api/v1";
     const LS_KEY = "smartlead_chat_session_id";
-
+  
     function tabSwitch(name) {
       document.querySelectorAll(".tab").forEach((b) => {
         b.classList.toggle("active", b.dataset.tab === name);
       });
       document.getElementById("panel-leads").classList.toggle("visible", name === "leads");
       document.getElementById("panel-chat").classList.toggle("visible", name === "chat");
+      document.getElementById("panel-icp").classList.toggle("visible", name === "icp");
     }
     document.querySelectorAll(".tab").forEach((b) => {
       b.addEventListener("click", () => tabSwitch(b.dataset.tab));
     });
-
+  
     /* ----- Leads ----- */
     const leadsStatus = document.getElementById("leads-status");
     const leadsErrors = document.getElementById("leads-errors");
     const leadsWrap = document.getElementById("leads-table-wrap");
-
+    const progressBar = document.getElementById("leads-progress-bar");
+  
+    function parseSseBuffer(buffer, onEvent) {
+      const parts = buffer.split("\n\n");
+      const rest = parts.pop() || "";
+      for (const block of parts) {
+        const line = block.trim().split("\n").find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        const json = line.replace(/^data:\s*/, "");
+        try {
+          onEvent(JSON.parse(json));
+        } catch {}
+      }
+      return rest;
+    }
+  
     document.getElementById("btn-process").addEventListener("click", async () => {
       leadsStatus.textContent = "";
       leadsErrors.textContent = "";
       leadsWrap.innerHTML = "";
+      progressBar.textContent = "";
+  
       const input = document.getElementById("csv-file");
       if (!input.files || !input.files[0]) {
         leadsStatus.textContent = "Choose a CSV file first.";
         return;
       }
+  
       const fd = new FormData();
       fd.append("file", input.files[0]);
+  
       const btn = document.getElementById("btn-process");
       btn.disabled = true;
-      leadsStatus.textContent = "Processing…";
+      leadsStatus.textContent = "Streaming…";
+      progressBar.textContent = "Starting…";
+  
+      let rows = [];
+  
       try {
-        const res = await fetch(API + "/leads/process", { method: "POST", body: fd });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          leadsStatus.textContent = res.status + " " + res.statusText;
-          leadsErrors.textContent = typeof data.detail === "string"
-            ? data.detail
-            : JSON.stringify(data.detail || data, null, 2);
-          return;
+        const res = await fetch(API + "/leads/process-stream", {
+          method: "POST",
+          body: fd,
+        });
+  
+        if (!res.ok || !res.body) {
+          const text = await res.text();
+          throw new Error(text || "Stream failed");
         }
-        leadsStatus.textContent = "Done (" + data.leads.length + " lead(s)).";
-        leadsStatus.className = "ok";
-        if (data.errors && data.errors.length) {
-          leadsErrors.textContent = "Warnings:\n" + data.errors.join("\n");
+  
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+  
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+  
+          buf += dec.decode(value, { stream: true });
+  
+          buf = parseSseBuffer(buf, (ev) => {
+  
+            if (ev.event === "start") {
+              progressBar.textContent = `Processing ${ev.total} lead(s)…`;
+            }
+  
+            if (ev.event === "step") {
+              progressBar.textContent =
+                ev.message || `${ev.phase} ${ev.index}/${ev.total} ${ev.company}`;
+            }
+  
+            if (ev.event === "lead") {
+              rows.push(ev.data);
+            }
+  
+            if (ev.event === "complete") {
+              progressBar.textContent = `Done — ${ev.lead_count} lead(s).`;
+  
+              if (ev.errors && ev.errors.length) {
+                leadsErrors.textContent = "Warnings:\n" + ev.errors.join("\n");
+              }
+            }
+  
+          });
         }
-        const rows = (data.leads || []).map((r) => {
+  
+        // build table (unchanged)
+        const htmlRows = rows.map((r) => {
           const L = r.lead || {};
           const R = r.research || {};
           const S = r.score || {};
           const O = r.outreach || {};
+  
           return `<tr>
             <td>${escapeHtml(L.company_name || "")}</td>
             <td>${escapeHtml(L.website || "")}</td>
@@ -150,17 +229,23 @@
             </td>
           </tr>`;
         }).join("");
+  
         leadsWrap.innerHTML = `<table><thead><tr>
           <th>Company</th><th>Website</th><th>Industry</th><th>Score</th><th>Email subject</th><th>Details</th>
-        </tr></thead><tbody>${rows}</tbody></table>`;
+        </tr></thead><tbody>${htmlRows}</tbody></table>`;
+  
+        leadsStatus.textContent = "Done (" + rows.length + " lead(s)).";
+        leadsStatus.className = "ok";
+  
       } catch (e) {
-        leadsStatus.textContent = "Request failed.";
+        leadsStatus.textContent = "Stream failed.";
         leadsErrors.textContent = String(e);
+        progressBar.textContent = "";
       } finally {
         btn.disabled = false;
       }
     });
-
+  
     function escapeHtml(s) {
       return String(s)
         .replace(/&/g, "&amp;")
@@ -168,12 +253,12 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
     }
-
+  
     /* ----- Chat ----- */
     const chatLog = document.getElementById("chat-log");
     const chatInput = document.getElementById("chat-input");
     const chatStatus = document.getElementById("chat-status");
-
+  
     function appendBubble(role, text) {
       const div = document.createElement("div");
       div.className = "bubble " + (role === "user" ? "user" : "assistant");
@@ -181,7 +266,7 @@
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
-
+  
     async function ensureSession() {
       let sid = localStorage.getItem(LS_KEY);
       if (sid) return sid;
@@ -192,7 +277,7 @@
       localStorage.setItem(LS_KEY, sid);
       return sid;
     }
-
+  
     document.getElementById("btn-new-session").addEventListener("click", async () => {
       localStorage.removeItem(LS_KEY);
       chatLog.innerHTML = "";
@@ -205,7 +290,7 @@
         chatStatus.textContent = String(e);
       }
     });
-
+  
     document.getElementById("btn-send").addEventListener("click", sendChat);
     chatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -213,7 +298,7 @@
         sendChat();
       }
     });
-
+  
     async function sendChat() {
       chatStatus.textContent = "";
       const text = chatInput.value.trim();
@@ -248,6 +333,75 @@
         btn.disabled = false;
       }
     }
+  
+    /* ----- ICP ----- */
+    const icpStatus = document.getElementById("icp-status");
+  
+    function splitList(s) {
+      return s.split(",").map((x) => x.trim()).filter(Boolean);
+    }
+  
+    async function loadIcp() {
+      icpStatus.textContent = "";
+      try {
+        const res = await fetch(API + "/icp");
+        const data = await res.json();
+        if (!res.ok) throw new Error(JSON.stringify(data));
+        document.getElementById("icp-industries").value = (data.target_industries || []).join(", ");
+        document.getElementById("icp-keywords").value = (data.keywords || []).join(", ");
+        document.getElementById("icp-notes").value = data.notes || "";
+        icpStatus.textContent = "Loaded.";
+        icpStatus.className = "ok";
+      } catch (e) {
+        icpStatus.textContent = String(e);
+        icpStatus.className = "err";
+      }
+    }
+  
+    document.getElementById("btn-icp-load").addEventListener("click", loadIcp);
+  
+    document.getElementById("btn-icp-save").addEventListener("click", async () => {
+      icpStatus.textContent = "";
+      const body = {
+        target_industries: splitList(document.getElementById("icp-industries").value),
+        keywords: splitList(document.getElementById("icp-keywords").value),
+        notes: document.getElementById("icp-notes").value.trim(),
+      };
+      try {
+        const res = await fetch(API + "/icp", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(JSON.stringify(data));
+        icpStatus.textContent = "Saved.";
+        icpStatus.className = "ok";
+      } catch (e) {
+        icpStatus.textContent = String(e);
+        icpStatus.className = "err";
+      }
+    });
+  
+    document.getElementById("btn-icp-reset").addEventListener("click", async () => {
+      icpStatus.textContent = "";
+      try {
+        const res = await fetch(API + "/icp/reset", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(JSON.stringify(data));
+        document.getElementById("icp-industries").value = (data.target_industries || []).join(", ");
+        document.getElementById("icp-keywords").value = (data.keywords || []).join(", ");
+        document.getElementById("icp-notes").value = data.notes || "";
+        icpStatus.textContent = "Reset to defaults.";
+        icpStatus.className = "ok";
+      } catch (e) {
+        icpStatus.textContent = String(e);
+        icpStatus.className = "err";
+      }
+    });
+  
+    loadIcp();
   </script>
+
 </body>
 </html>

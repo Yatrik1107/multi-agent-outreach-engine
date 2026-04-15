@@ -28,14 +28,8 @@ def _get(row: dict[str, Any], *names: str) -> str:
     return ""
 
 
-async def parse_leads_csv(file: UploadFile) -> tuple[list[LeadInput], list[str]]:
+def _parse_csv_text(raw: str) -> tuple[list[LeadInput], list[str]]:
     errors: list[str] = []
-    raw_bytes = await file.read()
-    try:
-        raw = raw_bytes.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        return [], ["CSV must be UTF-8 encoded."]
-
     reader = csv.DictReader(io.StringIO(raw))
     if not reader.fieldnames:
         return [], ["CSV has no header row."]
@@ -75,10 +69,23 @@ async def parse_leads_csv(file: UploadFile) -> tuple[list[LeadInput], list[str]]
                     contact_email=email,
                 ),
             )
-        except Exception as exc:  # noqa: BLE001 - POC validation
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"Row {idx}: invalid data ({exc}).")
 
     if not leads and not errors:
         errors.append("No data rows found after the header.")
 
     return leads, errors
+
+
+def parse_leads_csv_bytes(raw_bytes: bytes) -> tuple[list[LeadInput], list[str]]:
+    try:
+        raw = raw_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return [], ["CSV must be UTF-8 encoded."]
+    return _parse_csv_text(raw)
+
+
+async def parse_leads_csv(file: UploadFile) -> tuple[list[LeadInput], list[str]]:
+    raw_bytes = await file.read()
+    return parse_leads_csv_bytes(raw_bytes)
