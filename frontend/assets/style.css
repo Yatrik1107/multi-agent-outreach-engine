@@ -11,3 +11,28 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+.btn-sm {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.45rem;
+  margin: 0.15rem 0.2rem 0 0;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid #d4d4d8;
+  background: #fff;
+}
+
+.btn-sm.primary-sm {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.final-row td {
+  background: #fafafa;
+}
+
+#leads-export-row a {
+  font-size: 0.85rem;
+  margin-right: 0.75rem;
+}

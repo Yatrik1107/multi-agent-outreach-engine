@@ -96,3 +96,20 @@ def iter_pipeline_events(
         "errors": parse_errors,
         "lead_count": len(results),
     }
+    
+def run_single_lead(lead: LeadInput, icp: ICP, settings: Settings) -> LeadResult:
+    """Re-run research → score → outreach for one lead (clears any prior final_outreach)."""
+    research_agent = ResearchAgent(settings=settings)
+    scoring_agent = ScoringAgent(settings=settings)
+    outreach_agent = OutreachAgent(settings=settings)
+
+    research = research_agent.research(lead)
+    score = scoring_agent.score(lead, research, icp)
+    outreach = outreach_agent.draft(lead, research, score)
+    return LeadResult(
+        lead=lead,
+        research=research,
+        score=score,
+        outreach=outreach,
+        final_outreach=None,
+    )

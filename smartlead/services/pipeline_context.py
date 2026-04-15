@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from threading import Lock
 
-from smartlead.api.v1.schemas.leads import LeadResult
+from smartlead.api.v1.schemas.leads import LeadResult, OutreachDraft
 
 _lock = Lock()
 _last_results: list[LeadResult] | None = None
@@ -20,6 +20,29 @@ def get_last_lead_results() -> list[LeadResult] | None:
         if not _last_results:
             return None
         return list(_last_results)
+
+
+def replace_lead_at_index(index: int, new_row: LeadResult) -> None:
+    global _last_results
+    with _lock:
+        if _last_results is None or index < 0 or index >= len(_last_results):
+            raise ValueError("invalid lead index")
+        lst = list(_last_results)
+        lst[index] = new_row
+        _last_results = lst
+
+
+def patch_final_outreach(index: int, draft: OutreachDraft) -> LeadResult:
+    global _last_results
+    with _lock:
+        if _last_results is None or index < 0 or index >= len(_last_results):
+            raise ValueError("invalid lead index")
+        lst = list(_last_results)
+        row = lst[index]
+        updated = row.model_copy(update={"final_outreach": draft})
+        lst[index] = updated
+        _last_results = lst
+        return updated
 
 
 def format_pipeline_context_for_prompt(max_chars: int = 14000) -> str | None:

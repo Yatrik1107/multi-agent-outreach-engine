@@ -1,23 +1,27 @@
+import csv
+import io
 import json
 
-from fastapi.responses import StreamingResponse
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from smartlead.api.v1.schemas.leads import (
-    LeadsProcessResponse,
     LeadResult,
+    LeadsProcessResponse,
     SendOutreachEmailRequest,
     SendOutreachEmailResponse,
+    UpdateFinalOutreachRequest,
 )
-from smartlead.services.gmail_outreach import send_plain_email
 from smartlead.core.settings import Settings, get_settings
 from smartlead.services.csv_ingest import parse_leads_csv, parse_leads_csv_bytes
+from smartlead.services.gmail_outreach import send_plain_email
 from smartlead.services.icp_store import get_active_icp
-from smartlead.services.pipeline import run_pipeline, iter_pipeline_events
+from smartlead.services.pipeline import iter_pipeline_events, run_pipeline, run_single_lead
 from smartlead.services.pipeline_context import (
     get_last_lead_results,
     last_run_summary,
+    patch_final_outreach,
+    replace_lead_at_index,
     set_last_lead_results,
 )
 
@@ -27,14 +31,140 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
+
 @router.get("/context")
 def get_pipeline_context_status() -> dict[str, bool | int]:
-    """Whether the server has a last completed run (for UI hints)."""
     return last_run_summary()
+
 
 @router.get("/outreach-mail-status")
 def outreach_mail_status(settings: Settings = Depends(get_settings)) -> dict[str, bool]:
     return {"configured": settings.gmail_outreach_configured}
+
+
+@router.get("/export-csv")
+def export_last_run_csv() -> Response:
+    rows = get_last_lead_results()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No results. Run the pipeline first.")
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            "company_name",
+            "website",
+            "contact_email",
+            "score",
+            "subject",
+            "body",
+            "is_final_edited",
+        ],
+    )
+    for r in rows:
+        o = r.effective_outreach()
+        writer.writerow(
+            [
+                r.lead.company_name,
+                r.lead.website,
+                r.lead.contact_email,
+                r.score.score,
+                o.subject,
+                o.body,
+                "yes" if r.final_outreach is not None else "no",
+            ],
+        )
+    content = "\ufeff" + buf.getvalue()
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="smartlead_last_run.csv"',
+        },
+    )
+
+
+@router.get("/export-json")
+def export_last_run_json() -> JSONResponse:
+    rows = get_last_lead_results()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No results. Run the pipeline first.")
+
+    payload: list[dict[str, object]] = []
+    for r in rows:
+        o = r.effective_outreach()
+        payload.append(
+            {
+                "company_name": r.lead.company_name,
+                "website": r.lead.website,
+                "contact_email": r.lead.contact_email,
+                "score": r.score.score,
+                "subject": o.subject,
+                "body": o.body,
+                "is_final_edited": r.final_outreach is not None,
+            },
+        )
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Content-Disposition": 'attachment; filename="smartlead_last_run.json"',
+        },
+    )
+
+
+@router.put("/{lead_index}/final-outreach", response_model=LeadResult)
+def save_final_outreach(
+    lead_index: int = Path(..., ge=0),
+    body: UpdateFinalOutreachRequest = ...,
+) -> LeadResult:
+    rows = get_last_lead_results()
+    if not rows or lead_index >= len(rows):
+        raise HTTPException(
+            status_code=404,
+            detail="No lead at this index. Run the pipeline first.",
+        )
+    from smartlead.api.v1.schemas.leads import OutreachDraft
+
+    try:
+        return patch_final_outreach(
+            lead_index,
+            OutreachDraft(subject=body.subject.strip(), body=body.body),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{lead_index}/regenerate", response_model=LeadResult)
+def regenerate_single_lead(
+    lead_index: int = Path(..., ge=0),
+    settings: Settings = Depends(get_settings),
+) -> LeadResult:
+    if not settings.use_mock_llm and not settings.has_active_llm_credentials:
+        raise HTTPException(
+            status_code=503,
+            detail=settings.live_llm_config_error_detail(),
+        )
+
+    rows = get_last_lead_results()
+    if not rows or lead_index >= len(rows):
+        raise HTTPException(
+            status_code=404,
+            detail="No lead at this index. Run the pipeline first.",
+        )
+
+    lead = rows[lead_index].lead
+    icp = get_active_icp()
+    try:
+        new_row = run_single_lead(lead, icp, settings)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Regenerate failed: {exc}") from exc
+
+    try:
+        replace_lead_at_index(lead_index, new_row)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return new_row
 
 
 @router.post("/send-outreach-email", response_model=SendOutreachEmailResponse)
@@ -56,6 +186,8 @@ def send_outreach_email(
         )
 
     lead_result = rows[body.lead_index]
+    draft = lead_result.effective_outreach()
+
     to_raw = (str(body.to_email) if body.to_email else lead_result.lead.contact_email or "").strip()
     if not to_raw:
         raise HTTPException(
@@ -67,13 +199,14 @@ def send_outreach_email(
         send_plain_email(
             settings,
             to_addr=to_raw,
-            subject=lead_result.outreach.subject,
-            body=lead_result.outreach.body,
+            subject=draft.subject,
+            body=draft.body,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"SMTP failed: {exc}") from exc
 
     return SendOutreachEmailResponse(to=to_raw)
+
 
 @router.post("/process", response_model=LeadsProcessResponse)
 async def process_leads_csv(
@@ -105,6 +238,7 @@ async def process_leads_csv(
     set_last_lead_results(results)
 
     return LeadsProcessResponse(leads=results, errors=parse_errors)
+
 
 @router.post("/process-stream")
 async def process_leads_csv_stream(
