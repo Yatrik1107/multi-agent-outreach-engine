@@ -52,17 +52,16 @@
     tr.final-row.hidden { display: none; }
     .final-row td { background: #fafafa; }
     #leads-export-row a { font-size: 0.85rem; margin-right: 0.75rem; }
-    .email-body-preview {
-      cursor: pointer;
-      border: 1px dashed #d4d4d8;
+    .email-body-readonly {
+      cursor: default;
+      border: 1px solid #e4e4e7;
       border-radius: 4px;
       padding: 0.35rem;
       margin: 0.25rem 0 0;
-      background: #fff;
+      background: #fafafa;
       white-space: pre-wrap;
     }
-    .email-body-preview:hover { border-color: #2563eb; background: #eff6ff; }
-    .body-summary-edit { cursor: pointer; }
+    details summary.body-summary-readonly { cursor: pointer; }
   </style>
 </head>
 <body>
@@ -187,6 +186,15 @@
       return rest;
     }
 
+    async function openFinalEditorForIndex(i) {
+      openFinalEditorIndex = i;
+      await renderLeadsTable();
+      requestAnimationFrame(() => {
+        const ed = leadsWrap.querySelector('tr.final-row[data-lead-index="' + i + '"]');
+        if (ed) ed.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }
+
     async function renderLeadsTable() {
       const rows = lastLeadRows;
       if (!rows.length) {
@@ -210,10 +218,10 @@
               <td>${escapeHtml(F.subject || "")}${isFinal ? ' <span style="color:#15803d;font-size:0.7rem;">(final)</span>' : ""}</td>
               <td>
                 <details>
-                  <summary class="body-summary-edit" data-lead-index="${i}">
-                    Email body (${isFinal ? "final" : "auto"}) — open, then click body to edit
+                  <summary class="body-summary-readonly">
+                    Email body (${isFinal ? "final" : "auto"}) — click to expand (read-only)
                   </summary>
-                  <pre class="email-body-preview" data-lead-index="${i}" title="Click to edit draft">${escapeHtml(F.body || "")}</pre>
+                  <pre class="email-body-readonly">${escapeHtml(F.body || "")}</pre>
                 </details>
                 <details><summary>Research</summary>
                   <pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(JSON.stringify(R, null, 2))}</pre>
@@ -224,7 +232,7 @@
                 <div class="row" style="margin-top:0.35rem;">
                   <button type="button" class="btn-sm copy-outreach-btn" data-lead-index="${i}">Copy email</button>
                   <button type="button" class="btn-sm regen-btn" data-lead-index="${i}">Regenerate</button>
-                  <button type="button" class="btn-sm open-final-editor-btn" data-lead-index="${i}">Edit final draft</button>
+                  <button type="button" class="btn-sm open-final-editor-btn" data-lead-index="${i}">Edit draft</button>
                 </div>
               </td>
               <td class="send-cell">
@@ -240,7 +248,7 @@
             <tr class="final-row ${openFinalEditorIndex === i ? "" : "hidden"}" data-lead-index="${i}">
               <td colspan="7">
                 <div style="font-size:0.78rem;color:#52525b;margin-bottom:0.25rem;">
-                  <strong>Edit final draft</strong> (saved to server on Save)
+                  <strong>Edit draft</strong> (saved to server on Save)
                 </div>
                 <label style="font-size:0.75rem;">Subject</label>
                 <input class="final-subj" data-lead-index="${i}" style="width:100%;box-sizing:border-box;margin-bottom:0.25rem;" value="${escapeHtml(F.subject || "")}" />
@@ -268,31 +276,6 @@
           </thead>
           <tbody>${htmlRows}</tbody>
         </table>`;
-
-      async function openFinalEditorForIndex(i) {
-        openFinalEditorIndex = i;
-        await renderLeadsTable();
-        requestAnimationFrame(() => {
-          const ed = leadsWrap.querySelector(`tr.final-row[data-lead-index="${i}"]`);
-          if (ed) ed.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        });
-      }
-
-      leadsWrap.querySelectorAll(".email-body-preview").forEach((el) => {
-        el.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const i = parseInt(el.getAttribute("data-lead-index"), 10);
-          openFinalEditorForIndex(i);
-        });
-      });
-
-      leadsWrap.querySelectorAll(".body-summary-edit").forEach((el) => {
-        el.addEventListener("click", () => {
-          const i = parseInt(el.getAttribute("data-lead-index"), 10);
-          setTimeout(() => openFinalEditorForIndex(i), 0);
-        });
-      });
 
       leadsWrap.querySelectorAll(".open-final-editor-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
