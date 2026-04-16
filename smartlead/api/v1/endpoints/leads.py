@@ -11,6 +11,7 @@ from smartlead.api.v1.schemas.leads import (
     SendOutreachEmailRequest,
     SendOutreachEmailResponse,
     UpdateFinalOutreachRequest,
+    UpdateRecipientRequest
 )
 from smartlead.core.settings import Settings, get_settings
 from smartlead.services.csv_ingest import parse_leads_csv, parse_leads_csv_bytes
@@ -23,6 +24,7 @@ from smartlead.services.pipeline_context import (
     patch_final_outreach,
     replace_lead_at_index,
     set_last_lead_results,
+    patch_recipient_override
 )
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -55,6 +57,10 @@ def export_last_run_csv() -> Response:
             "company_name",
             "website",
             "contact_email",
+            "csv_email",
+            "discovered_email",
+            "recipient_override",
+            "recipient_effective",
             "score",
             "subject",
             "body",
@@ -68,10 +74,14 @@ def export_last_run_csv() -> Response:
                 r.lead.company_name,
                 r.lead.website,
                 r.lead.contact_email,
+                r.lead.contact_email,  # csv_email
+                r.discovered_contact_email or "",  # discovered_email
+                r.recipient_override or "",  # recipient_override
+                r.effective_recipient(),  # recipient_effective
                 r.score.score,
                 o.subject,
                 o.body,
-                "yes" if r.final_outreach is not None else "no",
+                "yes" if r.final_outreach is not None else "no",  # is_final_edited
             ],
         )
     content = "\ufeff" + buf.getvalue()
@@ -98,10 +108,14 @@ def export_last_run_json() -> JSONResponse:
                 "company_name": r.lead.company_name,
                 "website": r.lead.website,
                 "contact_email": r.lead.contact_email,
+                "csv_email": r.lead.contact_email,  # from CSV
+                "discovered_email": r.discovered_contact_email or "",  # from website discovery
+                "recipient_override": r.recipient_override or "",  # user edit
+                "recipient_effective": r.effective_recipient(),  # the one that will be used
                 "score": r.score.score,
                 "subject": o.subject,
                 "body": o.body,
-                "is_final_edited": r.final_outreach is not None,
+                "is_final_edited": "yes" if r.final_outreach is not None else "no",
             },
         )
     return JSONResponse(
@@ -151,11 +165,13 @@ def regenerate_single_lead(
             status_code=404,
             detail="No lead at this index. Run the pipeline first.",
         )
-
+    
     lead = rows[lead_index].lead
     icp = get_active_icp()
     try:
+        old = rows[lead_index]
         new_row = run_single_lead(lead, icp, settings)
+        new_row = new_row.model_copy(update={"recipient_override": old.recipient_override})
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Regenerate failed: {exc}") from exc
 
@@ -188,11 +204,14 @@ def send_outreach_email(
     lead_result = rows[body.lead_index]
     draft = lead_result.effective_outreach()
 
-    to_raw = (str(body.to_email) if body.to_email else lead_result.lead.contact_email or "").strip()
+    to_raw = (str(body.to_email) if body.to_email else lead_result.effective_recipient()).strip()
     if not to_raw:
         raise HTTPException(
             status_code=400,
-            detail="No recipient. Add contact_email to CSV or pass to_email.",
+            detail=(
+                "No recipient. Add email in CSV, save a discovered/recipient override in the UI, "
+                "or pass to_email when sending."
+            ),
         )
 
     try:
@@ -285,3 +304,16 @@ async def process_leads_csv_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+@router.put("/{lead_index}/recipient", response_model=LeadResult)
+def save_recipient_override(
+    lead_index: int = Path(..., ge=0),
+    body: UpdateRecipientRequest = ...,
+) -> LeadResult:
+    rows = get_last_lead_results()
+    if not rows or lead_index >= len(rows):
+        raise HTTPException(status_code=404, detail="No lead at this index. Run the pipeline first.")
+    try:
+        return patch_recipient_override(lead_index, body.email)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

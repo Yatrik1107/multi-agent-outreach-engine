@@ -60,6 +60,10 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("GMAIL_SMTP_KEY", "GMAIL_APP_PASSWORD"),
     )
+    
+    # When True and CSV has no contact email, try to find an address on the company website (homepage HTML).
+    enable_contact_email_discovery: bool = True
+    contact_discovery_max_bytes: int = 500_000
 
     def _provider_normalized(self) -> str:
         return (self.llm_provider or "gemini").strip().lower()

@@ -165,6 +165,28 @@
       window.location.href = API + "/leads/export-json";
     });
 
+    function effectiveRecipientRaw(r) {
+      if (!r) return "";
+      const o = (r.recipient_override || "").trim();
+      if (o) return o;
+      const c = (r.lead && r.lead.contact_email || "").trim();
+      if (c) return c;
+      const d = (r.discovered_contact_email || "").trim();
+      if (d) return d;
+      return "";
+    }
+
+    function effectiveRecipientLabel(r) {
+      if (!r) return "— none —";
+      const o = (r.recipient_override || "").trim();
+      if (o) return o + " (override)";
+      const c = (r.lead && r.lead.contact_email || "").trim();
+      if (c) return c + " (from CSV)";
+      const d = (r.discovered_contact_email || "").trim();
+      if (d) return d + " (from website)";
+      return "— none — (set below or Send will ask)";
+    }
+
     function effectiveOutreach(r) {
       if (r && r.final_outreach && (r.final_outreach.subject || r.final_outreach.body)) {
         return r.final_outreach;
@@ -215,6 +237,7 @@
               <td>${escapeHtml(L.website || "")}</td>
               <td>${escapeHtml(R.industry || "")}</td>
               <td class="num">${escapeHtml(String(S.score ?? ""))}</td>
+              <td>${escapeHtml(effectiveRecipientLabel(r))}</td>
               <td>${escapeHtml(F.subject || "")}${isFinal ? ' <span style="color:#15803d;font-size:0.7rem;">(final)</span>' : ""}</td>
               <td>
                 <details>
@@ -250,6 +273,24 @@
                 <div style="font-size:0.78rem;color:#52525b;margin-bottom:0.25rem;">
                   <strong>Edit draft</strong> (saved to server on Save)
                 </div>
+                <label style="font-size:0.75rem;">Recipient (To:)</label>
+                <input 
+                  type="email"
+                  class="recipient-override"
+                  data-lead-index="${i}"
+                  style="width:100%;box-sizing:border-box;margin-bottom:0.25rem;"
+                  value="${escapeHtml(
+                    r.recipient_override ||
+                    L.contact_email ||
+                    r.discovered_contact_email ||
+                    ""
+                  )}" 
+                />
+                <button type="button" class="btn-sm primary-sm save-recipient-btn" data-lead-index="${i}">
+                  Save recipient
+                </button>
+                <span class="save-recipient-status" data-lead-index="${i}" style="font-size:0.75rem;margin-left:0.35rem;"></span>
+
                 <label style="font-size:0.75rem;">Subject</label>
                 <input class="final-subj" data-lead-index="${i}" style="width:100%;box-sizing:border-box;margin-bottom:0.25rem;" value="${escapeHtml(F.subject || "")}" />
                 <label style="font-size:0.75rem;">Body</label>
@@ -269,6 +310,7 @@
               <th>Website</th>
               <th>Industry</th>
               <th>Score</th>
+              <th>Recipient</th>
               <th>Subject</th>
               <th>Details &amp; actions</th>
               <th>Send</th>
@@ -369,6 +411,47 @@
         });
       });
 
+      leadsWrap.querySelectorAll(".save-recipient-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const i = parseInt(btn.getAttribute("data-lead-index"), 10);
+          const input = leadsWrap.querySelector(`.recipient-override[data-lead-index="${i}"]`);
+          const status = leadsWrap.querySelector(`.save-recipient-status[data-lead-index="${i}"]`);
+
+          if (!input) return;
+
+          btn.disabled = true;
+          if (status) status.textContent = "";
+
+          try {
+            const res = await fetch(API + "/leads/" + i + "/recipient", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: input.value.trim() }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+              throw new Error(
+                typeof data.detail === "string"
+                  ? data.detail
+                  : JSON.stringify(data.detail || data)
+              );
+            }
+
+            lastLeadRows[i] = data;
+            if (status) status.textContent = "Saved.";
+
+            await renderLeadsTable();
+          } catch (e) {
+            if (status) status.textContent = "Error";
+            alert(String(e));
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+
       let mailConfigured = false;
       try {
         const st = await fetch(API + "/leads/outreach-mail-status").then((r) => r.json());
@@ -388,11 +471,11 @@
             `.send-outreach-status[data-lead-index="${idx}"]`,
           );
           const row = lastLeadRows[idx];
-          const ce = (row.lead && row.lead.contact_email) || "";
+          const rawRecipient = effectiveRecipientRaw(row);
 
           let toEmail = null;
-          if (!ce.trim()) {
-            toEmail = window.prompt("Recipient email (not in CSV):");
+          if (!rawRecipient) {
+            toEmail = window.prompt("Recipient email:");
             if (!toEmail || !toEmail.trim()) {
               if (statusEl) statusEl.textContent = "Cancelled.";
               return;

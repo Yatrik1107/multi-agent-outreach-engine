@@ -20,6 +20,7 @@ class OutreachAgent:
         lead: LeadInput,
         research: ResearchResult,
         score: ScoreResult,
+        contact_hint_email: str | None = None,
     ) -> OutreachDraft:
         sig = self.settings.outreach_signature_block()
         sig_instruction = (
@@ -34,7 +35,8 @@ class OutreachAgent:
 
         if not self.settings.live_llm:
             subject = f"Idea for {lead.company_name} ({research.industry.split('/')[0].strip()})"
-            who = lead.contact_email or "there"
+            raw = (contact_hint_email or lead.contact_email or "").strip()
+            who = raw if raw else "there"
             closing = sig if sig else "Best,\nSmart Lead POC"
             body = (
                 f"Hi {who},\n\n"
@@ -62,5 +64,7 @@ class OutreachAgent:
             f"{json.dumps(score.model_dump(), indent=2)}\n\n"
             "Return JSON with keys: subject (string), body (string). "
             "The body must include the requested sign-off as the last lines."
+            f"CONTACT_HINT_EMAIL (optional; use for greeting only if appropriate): "
+            f"{contact_hint_email or '(none)'}\n\n"
         )
         return llm.generate_json(system=system, user=user, model_cls=OutreachDraft, temperature=0.65)

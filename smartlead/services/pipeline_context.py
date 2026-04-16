@@ -84,3 +84,16 @@ def last_run_summary() -> dict[str, bool | int]:
     if not rows:
         return {"available": False, "lead_count": 0}
     return {"available": True, "lead_count": len(rows)}
+
+def patch_recipient_override(index: int, email: str | None) -> LeadResult:
+    global _last_results
+    with _lock:
+        if _last_results is None or index < 0 or index >= len(_last_results):
+            raise ValueError("invalid lead index")
+        lst = list(_last_results)
+        row = lst[index]
+        cleaned = (email or "").strip() or None
+        updated = row.model_copy(update={"recipient_override": cleaned})
+        lst[index] = updated
+        _last_results = lst
+        return updated
