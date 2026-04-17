@@ -1307,13 +1307,23 @@ btnProcess.addEventListener("click", async () => {
           setProgress(5, `Processing ${total} lead(s)…`);
         }
         if (ev.event === "step") {
-          const ph = ev.phase;
+          let ph = String(ev.phase || "").toLowerCase();
+          
+          // Robustly catch variations in phase names from the backend
+          if (ph.includes("score") || ph.includes("scoring") || ph.includes("qualify") || ph.includes("evaluate")) ph = "score";
+          else if (ph.includes("research")) ph = "research";
+          else if (ph.includes("outreach") || ph.includes("mail")) ph = "outreach";
+          
           if (ph === "research") setPipelinePhase("research");
           else if (ph === "score") setPipelinePhase("score");
           else if (ph === "outreach") setPipelinePhase("outreach");
-          if (ev.company) setAgentSub(ph, `${ev.company} (${ev.index}/${ev.total})`);
+          
+          if (ev.company && ["research", "score", "outreach"].includes(ph)) {
+            setAgentSub(ph, `${ev.company} (${ev.index}/${ev.total})`);
+          }
+          
           const pct = total ? Math.round((ev.index / total) * 88) + 5 : 50;
-          setProgress(pct, ev.message || `${ph} · ${ev.company} · ${ev.index}/${ev.total}`);
+          setProgress(pct, ev.message || `${ev.phase} · ${ev.company} · ${ev.index}/${ev.total}`);
         }
         if (ev.event === "lead") {
           lastLeadRows.push(ev.data);

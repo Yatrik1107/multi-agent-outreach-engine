@@ -67,4 +67,28 @@ class OutreachAgent:
             f"CONTACT_HINT_EMAIL (optional; use for greeting only if appropriate): "
             f"{contact_hint_email or '(none)'}\n\n"
         )
-        return llm.generate_json(system=system, user=user, model_cls=OutreachDraft, temperature=0.65)
+        draft = llm.generate_json(system=system, user=user, model_cls=OutreachDraft, temperature=0.65)
+        draft.body = self._apply_signature_fallback(draft.body)
+        return draft
+    
+    def _apply_signature_fallback(self, body: str) -> str:
+        sig = self.settings.outreach_signature_block()
+        if not sig:
+            return body
+
+        normalized = (body or "").strip()
+        # Remove common placeholder tokens if present.
+        normalized = normalized.replace("[Your Name]", self.settings.outreach_sender_name or "Your Name")
+        normalized = normalized.replace("[Your Position]", self.settings.outreach_sender_role or "Your Position")
+        normalized = normalized.replace("[Your Company Name]", self.settings.outreach_sender_company or "Your Company Name")
+        normalized = normalized.replace("Your Name", self.settings.outreach_sender_name or "Your Name")
+        normalized = normalized.replace("Your Position", self.settings.outreach_sender_role or "Your Position")
+        normalized = normalized.replace("Your Company Name", self.settings.outreach_sender_company or "Your Company Name")
+
+        # Ensure exact signature at end.
+        lines = normalized.rstrip().splitlines()
+        # remove trailing sign-off-ish lines if model already added generic ending
+        while lines and lines[-1].strip().lower() in {"best", "best regards,", "regards,", "thanks,", "thank you,"}:
+            lines.pop()
+
+        return "\n".join(lines).rstrip() + "\n\n" + sig
