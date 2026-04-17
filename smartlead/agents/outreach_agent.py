@@ -77,7 +77,8 @@ class OutreachAgent:
             return body
 
         normalized = (body or "").strip()
-        # Remove common placeholder tokens if present.
+
+        # Replace placeholder tokens when present.
         normalized = normalized.replace("[Your Name]", self.settings.outreach_sender_name or "Your Name")
         normalized = normalized.replace("[Your Position]", self.settings.outreach_sender_role or "Your Position")
         normalized = normalized.replace("[Your Company Name]", self.settings.outreach_sender_company or "Your Company Name")
@@ -85,10 +86,22 @@ class OutreachAgent:
         normalized = normalized.replace("Your Position", self.settings.outreach_sender_role or "Your Position")
         normalized = normalized.replace("Your Company Name", self.settings.outreach_sender_company or "Your Company Name")
 
-        # Ensure exact signature at end.
-        lines = normalized.rstrip().splitlines()
-        # remove trailing sign-off-ish lines if model already added generic ending
+        sig_clean = sig.strip()
+        text = normalized.rstrip()
+
+        # If exact signature already at the end, keep it as-is (no duplication).
+        if text.endswith(sig_clean):
+            return text
+
+        # Remove duplicate trailing signature blocks if model generated them multiple times.
+        double_sig = (sig_clean + "\n\n" + sig_clean)
+        while text.endswith(double_sig):
+            text = text[: -len(sig_clean)].rstrip()
+
+        # Remove generic trailing sign-off-only line if present.
+        lines = text.splitlines()
         while lines and lines[-1].strip().lower() in {"best", "best regards,", "regards,", "thanks,", "thank you,"}:
             lines.pop()
 
-        return "\n".join(lines).rstrip() + "\n\n" + sig
+        text = "\n".join(lines).rstrip()
+        return text + "\n\n" + sig_clean
