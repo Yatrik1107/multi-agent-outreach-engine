@@ -1398,25 +1398,37 @@ document.getElementById("link-export-json").addEventListener("click", e => { e.p
 const chatLog   = document.getElementById("chat-log");
 const chatInput = document.getElementById("chat-input");
 const chatError = document.getElementById("chat-error");
-const typing    = document.getElementById("typing");
+
+function getTypingNode() {
+  return document.getElementById("typing");
+}
 
 function appendBubble(role, text) {
-  const ts  = new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  const ts  = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const div = document.createElement("div");
   div.className = "bubble-wrap";
   div.innerHTML = `
-    <div class="chat-bubble ${role}">${esc(text).replace(/\n/g,"<br/>")}</div>
-    <div class="bubble-ts ${role==="user"?"right":""}">${ts}</div>`;
-  chatLog.insertBefore(div, typing);
+    <div class="chat-bubble ${role}">${esc(text).replace(/\n/g, "<br/>")}</div>
+    <div class="bubble-ts ${role === "user" ? "right" : ""}">${ts}</div>`;
+
+  const typing = getTypingNode();
+  if (typing && typing.parentNode === chatLog) {
+    chatLog.insertBefore(div, typing);
+  } else {
+    chatLog.appendChild(div);
+  }
+
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
 async function ensureSession() {
   let sid = localStorage.getItem(LS_KEY);
   if (sid) return sid;
+
   const res  = await fetch(API + "/chat/sessions", { method: "POST" });
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
+
   sid = data.session_id;
   localStorage.setItem(LS_KEY, sid);
   return sid;
@@ -1424,45 +1436,87 @@ async function ensureSession() {
 
 async function sendChat() {
   chatError.textContent = "";
+
   const text = chatInput.value.trim();
   if (!text) return;
-  chatInput.value = ""; chatInput.style.height = "auto";
+
+  chatInput.value = "";
+  chatInput.style.height = "auto";
   appendBubble("user", text);
-  document.getElementById("btn-send").disabled = true;
-  typing.classList.add("visible");
+
+  const sendBtn = document.getElementById("btn-send");
+  sendBtn.disabled = true;
+
+  const typing = getTypingNode();
+  if (typing) typing.classList.add("visible");
   chatLog.scrollTop = chatLog.scrollHeight;
+
   try {
     const sid    = await ensureSession();
     const useCtx = document.getElementById("use-pipeline-ctx").checked;
-    const res    = await fetch(API + "/chat/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sid, message: text, use_pipeline_context: useCtx })
+
+    const res = await fetch(API + "/chat/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sid,
+        message: text,
+        use_pipeline_context: useCtx
+      })
     });
+
     const data = await res.json().catch(() => ({}));
-    typing.classList.remove("visible");
-    if (!res.ok) { chatError.textContent = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail||data); return; }
+
+    const typingAfter = getTypingNode();
+    if (typingAfter) typingAfter.classList.remove("visible");
+
+    if (!res.ok) {
+      chatError.textContent =
+        typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+      return;
+    }
+
     appendBubble("assistant", data.reply || "");
   } catch (e) {
-    typing.classList.remove("visible");
+    const typingErr = getTypingNode();
+    if (typingErr) typingErr.classList.remove("visible");
     chatError.textContent = String(e);
   } finally {
-    document.getElementById("btn-send").disabled = false;
+    sendBtn.disabled = false;
   }
 }
 
 document.getElementById("btn-send").addEventListener("click", sendChat);
-chatInput.addEventListener("keydown", e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
-chatInput.addEventListener("input", function() { this.style.height="auto"; this.style.height=Math.min(this.scrollHeight,120)+"px"; });
+
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+chatInput.addEventListener("input", function () {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+});
 
 document.getElementById("btn-new-session").addEventListener("click", async () => {
   localStorage.removeItem(LS_KEY);
   chatError.textContent = "";
+
   chatLog.innerHTML = `
-    <div class="bubble-wrap"><div class="chat-bubble assistant">New session started. How can I help?</div></div>
+    <div class="bubble-wrap">
+      <div class="chat-bubble assistant">New session started. How can I help?</div>
+    </div>
     <div class="typing" id="typing">
-      <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
     </div>`;
+
+  chatLog.scrollTop = chatLog.scrollHeight;
 });
+
 
 /* ══════════════════════════════════════════════════════════
    ICP
