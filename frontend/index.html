@@ -4,779 +4,1514 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smart Lead Qualifier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <style>
-    :root { font-family: system-ui, sans-serif; color: #1a1a1a; background: #f4f4f5; }
-    body { margin: 0; max-width: 1100px; margin-inline: auto; padding: 1rem 1.25rem 2rem; }
-    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
-    p.sub { margin: 0 0 1rem; color: #52525b; font-size: 0.9rem; }
-    nav { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    nav button {
-      border: 1px solid #d4d4d8; background: #fff; padding: 0.45rem 0.9rem;
-      border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:              #f6f5f2;
+      --surface:         #ffffff;
+      --border:          #e8e6e1;
+      --border-strong:   #d0cec8;
+      --text-primary:    #1a1917;
+      --text-secondary:  #6b6864;
+      --text-muted:      #9e9b96;
+      --accent:          #1e40af;
+      --accent-light:    #eff3fe;
+      --accent-text:     #1e3a8a;
+      --success:         #166534;
+      --success-bg:      #f0fdf4;
+      --success-border:  #bbf7d0;
+      --warn:            #92400e;
+      --warn-bg:         #fffbeb;
+      --warn-border:     #fde68a;
+      --danger:          #991b1b;
+      --danger-bg:       #fef2f2;
+      --danger-border:   #fecaca;
+      --score-high:      #166534;
+      --score-high-bg:   #dcfce7;
+      --score-mid:       #92400e;
+      --score-mid-bg:    #fef3c7;
+      --score-low:       #991b1b;
+      --score-low-bg:    #fee2e2;
+      --mono:            'IBM Plex Mono', monospace;
+      --sans:            'DM Sans', sans-serif;
+      --radius:          10px;
+      --radius-lg:       14px;
     }
-    nav button.active { background: #18181b; color: #fff; border-color: #18181b; }
-    section.panel {
-      display: none; background: #fff; border: 1px solid #e4e4e7;
-      border-radius: 8px; padding: 1rem 1.1rem;
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      font-size: 15px;
     }
-    section.panel.visible { display: block; }
-    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
-    input[type="file"] { font-size: 0.85rem; }
-    button.primary {
-      background: #2563eb; color: #fff; border: none; padding: 0.5rem 1rem;
-      border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+
+    /* ══════════════════════════════════════
+       TOP BAR
+    ══════════════════════════════════════ */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      height: 54px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
     }
-    button.primary:disabled { opacity: 0.55; cursor: not-allowed; }
-    .err { color: #b91c1c; font-size: 0.85rem; white-space: pre-wrap; }
-    .ok { color: #15803d; font-size: 0.85rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.5rem; }
-    th, td { border: 1px solid #e4e4e7; padding: 0.35rem 0.45rem; vertical-align: top; text-align: left; }
-    th { background: #fafafa; }
-    td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    details { margin-top: 0.25rem; }
-    #chat-log {
-      border: 1px solid #e4e4e7; border-radius: 6px; height: 280px; overflow-y: auto;
-      padding: 0.5rem 0.65rem; background: #fafafa; font-size: 0.88rem; margin-bottom: 0.5rem;
+    .topbar-brand {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-weight: 600; font-size: 0.92rem; letter-spacing: -0.01em;
+      flex-shrink: 0;
     }
-    .bubble { margin: 0.35rem 0; padding: 0.35rem 0.5rem; border-radius: 6px; max-width: 95%; }
-    .bubble.user { background: #dbeafe; margin-left: 1.5rem; }
-    .bubble.assistant { background: #fff; border: 1px solid #e4e4e7; margin-right: 1.5rem; }
-    .bubble .meta { font-size: 0.72rem; color: #71717a; margin-bottom: 0.15rem; }
-    #chat-input {
-      width: 100%; box-sizing: border-box; padding: 0.5rem; border-radius: 6px;
-      border: 1px solid #d4d4d8; font-size: 0.9rem; margin-bottom: 0.35rem;
+    .brand-mark {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: var(--text-primary);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
+      color: #fff; letter-spacing: 0;
     }
-    textarea { width: 100%; box-sizing: border-box; min-height: 4rem; font-size: 0.82rem; }
-    .btn-sm { font-size: 0.78rem; padding: 0.25rem 0.45rem; margin: 0.15rem 0.2rem 0 0; cursor: pointer; border-radius: 4px; border: 1px solid #d4d4d8; background: #fff; }
-    .btn-sm.primary-sm { background: #2563eb; color: #fff; border-color: #2563eb; }
-    tr.final-row.hidden { display: none; }
-    .final-row td { background: #fafafa; }
-    #leads-export-row a { font-size: 0.85rem; margin-right: 0.75rem; }
-    .email-body-readonly {
-      cursor: default;
-      border: 1px solid #e4e4e7;
-      border-radius: 4px;
-      padding: 0.35rem;
-      margin: 0.25rem 0 0;
-      background: #fafafa;
-      white-space: pre-wrap;
+    .topbar-sep { width: 1px; height: 18px; background: var(--border); }
+
+    nav.tabs { display: flex; gap: 2px; }
+    .tab-btn {
+      font-family: var(--sans); font-size: 0.83rem; font-weight: 400;
+      color: var(--text-secondary); border: none; background: none;
+      padding: 0.38rem 0.8rem; cursor: pointer;
+      border-radius: 7px; transition: background .14s, color .14s;
+      display: flex; align-items: center; gap: 0.35rem;
     }
-    details summary.body-summary-readonly { cursor: pointer; }
+    .tab-btn:hover { background: var(--bg); color: var(--text-primary); }
+    .tab-btn.active { background: var(--text-primary); color: #fff; font-weight: 500; }
+    .tab-count {
+      font-family: var(--mono); font-size: 0.68rem;
+      padding: 1px 6px; border-radius: 20px;
+      background: rgba(255,255,255,.18); color: inherit;
+    }
+    .tab-btn:not(.active) .tab-count { background: var(--border); color: var(--text-muted); }
+
+    /* ══════════════════════════════════════
+       MAIN + PANELS
+    ══════════════════════════════════════ */
+    .main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.5rem 3rem; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ══════════════════════════════════════
+       AGENT PIPELINE BAR
+    ══════════════════════════════════════ */
+    .pipeline-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.1rem 1.4rem;
+      margin-bottom: 1.1rem;
+    }
+    .pipeline-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 0.9rem;
+    }
+    .pipeline-label {
+      font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .07em;
+      color: var(--text-muted);
+    }
+    .pipeline-badge {
+      font-family: var(--mono); font-size: 0.7rem;
+      padding: 2px 10px; border-radius: 20px;
+      background: var(--border); color: var(--text-secondary);
+      transition: background .2s, color .2s;
+    }
+    .pipeline-badge.running { background: var(--accent-light); color: var(--accent-text); animation: pulse 1.8s infinite; }
+    .pipeline-badge.done    { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+    .agents {
+      display: flex; align-items: stretch; gap: 0;
+    }
+    .agent-node {
+      flex: 1; display: flex; align-items: center; gap: 0.65rem;
+      padding: .65rem .9rem; border-radius: var(--radius);
+      border: 1px solid var(--border); background: var(--bg);
+      transition: border-color .2s, background .2s;
+    }
+    .agent-node.active   { border-color: var(--accent); background: var(--accent-light); }
+    .agent-node.complete { border-color: var(--success-border); background: var(--success-bg); }
+
+    .agent-arrow {
+      width: 36px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--border-strong); font-size: 1rem;
+      transition: color .2s;
+    }
+    .agent-arrow.active   { color: var(--accent); }
+    .agent-arrow.complete { color: var(--success); }
+
+    .agent-ico {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--border); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .agent-node.active   .agent-ico { background: #dbeafe; }
+    .agent-node.complete .agent-ico { background: var(--success-border); }
+
+    .agent-text {}
+    .agent-name { font-size: .8rem; font-weight: 600; }
+    .agent-sub  { font-size: .7rem; color: var(--text-muted); }
+    .agent-node.active   .agent-sub { color: var(--accent); font-weight: 500; }
+    .agent-node.complete .agent-sub { color: var(--success); font-weight: 500; }
+
+    /* ══════════════════════════════════════
+       UPLOAD ZONE
+    ══════════════════════════════════════ */
+    .upload-zone {
+      border: 2px dashed var(--border-strong);
+      border-radius: var(--radius-lg);
+      padding: 2.25rem 2rem;
+      text-align: center; cursor: pointer;
+      background: var(--surface);
+      transition: border-color .18s, background .18s;
+      margin-bottom: 1.1rem;
+      position: relative;
+    }
+    .upload-zone:hover,
+    .upload-zone.dragover { border-color: var(--accent); background: var(--accent-light); }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon { font-size: 1.8rem; margin-bottom: .4rem; }
+    .upload-title { font-size: .93rem; font-weight: 500; margin-bottom: .2rem; }
+    .upload-hint  { font-size: .78rem; color: var(--text-muted); }
+    .upload-chip  {
+      display: inline-block; margin-top: .55rem;
+      font-family: var(--mono); font-size: .75rem;
+      background: var(--accent-light); color: var(--accent-text);
+      border: 1px solid #bfdbfe; padding: 2px 10px; border-radius: 20px;
+    }
+
+    /* ══════════════════════════════════════
+       TOOLBAR
+    ══════════════════════════════════════ */
+    .toolbar {
+      display: flex; align-items: center; gap: .55rem;
+      margin-bottom: 1.1rem; flex-wrap: wrap;
+    }
+    .btn {
+      font-family: var(--sans); font-size: .83rem; font-weight: 500;
+      padding: .42rem .95rem; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-primary); cursor: pointer;
+      display: inline-flex; align-items: center; gap: .35rem;
+      transition: background .14s, border-color .14s;
+      white-space: nowrap; line-height: 1;
+    }
+    .btn:hover   { background: var(--bg); border-color: var(--border-strong); }
+    .btn:disabled { opacity: .42; cursor: not-allowed; }
+    .btn-primary { background: var(--text-primary); color: #fff; border-color: var(--text-primary); }
+    .btn-primary:hover { background: #2d2c2a; border-color: #2d2c2a; }
+    .btn-primary:disabled { background: var(--text-muted); border-color: var(--text-muted); }
+    .btn-accent  { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-accent:hover { background: #1a37a8; }
+    .btn-sm {
+      font-size: .72rem; padding: 3px 8px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-secondary); cursor: pointer;
+      display: inline-flex; align-items: center; gap: 3px;
+      font-family: var(--sans); font-weight: 400;
+      transition: background .12s, color .12s, border-color .12s;
+      white-space: nowrap;
+    }
+    .btn-sm:hover { background: var(--bg); border-color: var(--border-strong); color: var(--text-primary); }
+    .btn-sm:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-sm-primary { background: var(--accent-light); color: var(--accent-text); border-color: #bfdbfe; }
+    .btn-sm-primary:hover { background: #dbeafe; }
+    .btn-sm-danger  { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+
+    .export-links {
+      display: none; align-items: center; gap: .5rem;
+      font-size: .8rem;
+    }
+    .export-links.visible { display: flex; }
+    .export-links span { color: var(--text-muted); }
+    .export-links a {
+      color: var(--accent-text); text-decoration: none;
+      font-family: var(--mono); font-size: .75rem;
+      padding: 2px 8px; border-radius: 5px;
+      background: var(--accent-light); border: 1px solid #bfdbfe;
+      transition: background .12s;
+    }
+    .export-links a:hover { background: #dbeafe; }
+
+    /* ══════════════════════════════════════
+       ALERTS
+    ══════════════════════════════════════ */
+    .alert {
+      border-radius: var(--radius); padding: .6rem .85rem;
+      font-size: .8rem; margin-bottom: .75rem;
+      display: flex; gap: .45rem; align-items: flex-start;
+    }
+    .alert.danger  { background: var(--danger-bg);  border: 1px solid var(--danger-border);  color: var(--danger); }
+    .alert.warn    { background: var(--warn-bg);    border: 1px solid var(--warn-border);    color: var(--warn); }
+    .alert.success { background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success); }
+
+    /* ══════════════════════════════════════
+       PROGRESS
+    ══════════════════════════════════════ */
+    .progress-wrap {
+      display: none; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: .75rem 1rem; margin-bottom: 1.1rem;
+    }
+    .progress-wrap.visible { display: block; }
+    .progress-label {
+      font-family: var(--mono); font-size: .75rem;
+      color: var(--text-secondary); margin-bottom: .45rem;
+    }
+    .progress-track {
+      background: var(--bg); border-radius: 20px; height: 5px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 20px; width: 0%;
+      background: var(--accent);
+      transition: width .4s ease;
+    }
+
+    /* ══════════════════════════════════════
+       STATS ROW
+    ══════════════════════════════════════ */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(4,1fr);
+      gap: .75rem; margin-bottom: 1.1rem;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: .8rem 1rem;
+    }
+    .stat-lbl { font-family: var(--mono); font-size: .65rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: .25rem; }
+    .stat-val { font-family: var(--mono); font-size: 1.45rem; font-weight: 600; }
+    .stat-val.high { color: var(--score-high); }
+    .stat-val.mid  { color: var(--score-mid); }
+
+    /* ══════════════════════════════════════
+       FILTER + SEARCH
+    ══════════════════════════════════════ */
+    .filter-row {
+      display: flex; align-items: center; gap: .45rem;
+      margin-bottom: .9rem; flex-wrap: wrap;
+    }
+    .filter-lbl { font-family: var(--mono); font-size: .7rem; color: var(--text-muted); margin-right: 2px; }
+    .chip {
+      font-family: var(--mono); font-size: .72rem;
+      padding: 3px 10px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text-secondary); cursor: pointer;
+      transition: all .13s;
+    }
+    .chip.active { background: var(--text-primary); color: #fff; border-color: var(--text-primary); }
+    .chip:hover:not(.active) { border-color: var(--border-strong); color: var(--text-primary); }
+    .search-box {
+      margin-left: auto; font-family: var(--sans); font-size: .83rem;
+      padding: .3rem .7rem; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--surface); color: var(--text-primary);
+      outline: none; width: 190px;
+    }
+    .search-box:focus { border-color: var(--accent); }
+
+    /* ══════════════════════════════════════
+       LEADS TABLE
+    ══════════════════════════════════════ */
+    .table-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+    }
+    table.ltable { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    table.ltable thead tr {
+      background: var(--bg); border-bottom: 1px solid var(--border);
+    }
+    table.ltable th {
+      padding: .6rem 1rem; text-align: left;
+      font-family: var(--mono); font-size: .65rem; font-weight: 500;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: .055em;
+      white-space: nowrap;
+    }
+    table.ltable td {
+      padding: .8rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle;
+    }
+    table.ltable tbody tr:last-child td { border-bottom: none; }
+    table.ltable tbody tr.data-row:hover { background: #faf9f7; }
+
+    /* Company cell */
+    .co-cell { display: flex; align-items: center; gap: .6rem; }
+    .co-avatar {
+      width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: .68rem; font-weight: 600;
+    }
+    .co-name { font-weight: 500; font-size: .82rem; }
+    .co-site { font-family: var(--mono); font-size: .68rem; color: var(--text-muted); }
+
+    /* Score */
+    .score-wrap { display: flex; align-items: center; gap: .4rem; }
+    .score-badge {
+      font-family: var(--mono); font-size: .75rem; font-weight: 600;
+      padding: 3px 9px; border-radius: 20px;
+      display: inline-flex; align-items: center;
+    }
+    .score-badge.high { background: var(--score-high-bg); color: var(--score-high); }
+    .score-badge.mid  { background: var(--score-mid-bg);  color: var(--score-mid); }
+    .score-badge.low  { background: var(--score-low-bg);  color: var(--score-low); }
+    .score-track { width: 52px; height: 4px; background: var(--border); border-radius: 20px; overflow: hidden; }
+    .score-bar   { height: 100%; border-radius: 20px; }
+
+    /* Recipient cell */
+    .recip-cell { font-size: .75rem; }
+    .recip-main { font-family: var(--mono); font-size: .72rem; color: var(--text-secondary); }
+    .recip-tag  {
+      display: inline-block; font-size: .63rem; font-family: var(--mono);
+      padding: 1px 6px; border-radius: 10px; margin-left: 4px;
+      background: var(--bg); border: 1px solid var(--border); color: var(--text-muted);
+      vertical-align: middle;
+    }
+    .recip-none { color: var(--text-muted); font-style: italic; font-size: .75rem; }
+
+    /* Subject */
+    .subject-cell { font-size: .78rem; max-width: 180px; }
+    .subject-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .final-badge {
+      display: inline-block; font-size: .62rem; font-family: var(--mono);
+      padding: 1px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle;
+      background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border);
+    }
+
+    /* Action buttons row */
+    .action-row { display: flex; gap: .3rem; margin-top: .45rem; flex-wrap: wrap; }
+
+    /* ══════════════════════════════════════
+       EXPANDED DETAIL ROW
+    ══════════════════════════════════════ */
+    tr.expand-row > td { padding: 0; background: var(--bg); }
+    .expand-inner {
+      padding: .9rem 1rem;
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .85rem;
+    }
+    .expand-sec h4 {
+      font-family: var(--mono); font-size: .63rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: .4rem;
+    }
+    .expand-pre {
+      font-family: var(--mono); font-size: .72rem; color: var(--text-secondary);
+      white-space: pre-wrap; line-height: 1.5;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: .55rem .65rem;
+      max-height: 150px; overflow-y: auto;
+    }
+    .email-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .email-subj { font-family: var(--mono); font-size: .72rem; padding: .45rem .7rem; background: var(--bg); border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .email-body-ro { font-size: .73rem; line-height: 1.55; padding: .55rem .7rem; color: var(--text-secondary); max-height: 130px; overflow-y: auto; white-space: pre-wrap; }
+
+    /* ══════════════════════════════════════
+       EDIT DRAFT ROW
+    ══════════════════════════════════════ */
+    tr.editor-row > td { padding: 0; background: var(--accent-light); border-top: 2px solid var(--accent); }
+    .editor-inner { padding: 1rem 1.1rem; }
+    .editor-title {
+      font-size: .78rem; font-weight: 600; margin-bottom: .85rem;
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: .85rem; }
+    .editor-field { display: flex; flex-direction: column; gap: .3rem; }
+    .editor-field label { font-family: var(--mono); font-size: .65rem; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); }
+    .field-row { display: flex; gap: .4rem; align-items: center; }
+    .field-input {
+      flex: 1; font-family: var(--mono); font-size: .78rem;
+      padding: .35rem .6rem; border: 1px solid var(--border-strong);
+      border-radius: 7px; background: var(--surface); color: var(--text-primary);
+      outline: none; transition: border-color .14s;
+    }
+    .field-input:focus { border-color: var(--accent); }
+    .field-textarea {
+      font-family: var(--mono); font-size: .75rem; line-height: 1.5;
+      padding: .45rem .6rem; border: 1px solid var(--border-strong);
+      border-radius: 7px; background: var(--surface); color: var(--text-primary);
+      outline: none; resize: vertical; min-height: 90px; width: 100%;
+      transition: border-color .14s;
+    }
+    .field-textarea:focus { border-color: var(--accent); }
+    .editor-actions { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+    .inline-status { font-family: var(--mono); font-size: .7rem; }
+    .inline-status.ok  { color: var(--success); }
+    .inline-status.err { color: var(--danger); }
+
+    /* ══════════════════════════════════════
+       SEND CELL
+    ══════════════════════════════════════ */
+    .send-cell { white-space: nowrap; }
+    .send-status { font-family: var(--mono); font-size: .68rem; margin-top: 3px; }
+    .send-status.ok  { color: var(--success); }
+    .send-status.err { color: var(--danger); }
+
+    /* ══════════════════════════════════════
+       EMPTY STATE
+    ══════════════════════════════════════ */
+    .empty-state {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 3rem 2rem; text-align: center;
+    }
+    .empty-icon  { font-size: 2.2rem; margin-bottom: .6rem; }
+    .empty-title { font-size: .95rem; font-weight: 500; margin-bottom: .3rem; }
+    .empty-desc  { font-size: .82rem; color: var(--text-muted); }
+
+    /* ══════════════════════════════════════
+       CHAT
+    ══════════════════════════════════════ */
+    .chat-shell {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+      display: flex; flex-direction: column;
+      height: calc(100vh - 150px); min-height: 400px;
+    }
+    .chat-head {
+      padding: .8rem 1.2rem; border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .chat-head-left { display: flex; align-items: center; gap: .5rem; font-size: .88rem; font-weight: 600; }
+    .online-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+    .chat-head-right { display: flex; align-items: center; gap: .75rem; }
+    .ctx-toggle { font-size: .75rem; color: var(--text-muted); display: flex; align-items: center; gap: .3rem; cursor: pointer; user-select: none; }
+    .ctx-toggle input { accent-color: var(--accent); }
+
+    .chat-msgs {
+      flex: 1; overflow-y: auto;
+      padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: .65rem;
+    }
+    .bubble-wrap {}
+    .chat-bubble {
+      max-width: 76%; padding: .6rem .85rem;
+      border-radius: 12px; font-size: .83rem; line-height: 1.55;
+    }
+    .chat-bubble.user      { background: var(--text-primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
+    .chat-bubble.assistant { background: var(--bg); border: 1px solid var(--border); color: var(--text-primary); align-self: flex-start; border-bottom-left-radius: 3px; }
+    .bubble-ts { font-size: .68rem; color: var(--text-muted); font-family: var(--mono); margin-top: .2rem; }
+    .bubble-ts.right { text-align: right; }
+
+    .typing {
+      display: none; align-items: center; gap: 3px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px 12px 12px 3px;
+      padding: .55rem .85rem; width: fit-content;
+    }
+    .typing.visible { display: flex; }
+    .typing-dot { width: 5px; height: 5px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.3s infinite; }
+    .typing-dot:nth-child(2) { animation-delay: .18s; }
+    .typing-dot:nth-child(3) { animation-delay: .36s; }
+    @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+    .chat-foot {
+      border-top: 1px solid var(--border); padding: .8rem 1.2rem;
+      display: flex; gap: .55rem; align-items: flex-end;
+      background: var(--surface); flex-shrink: 0;
+    }
+    .chat-ta {
+      flex: 1; font-family: var(--sans); font-size: .85rem;
+      padding: .5rem .75rem; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--bg); color: var(--text-primary);
+      resize: none; min-height: 40px; max-height: 120px; outline: none;
+      line-height: 1.5; transition: border-color .14s;
+    }
+    .chat-ta:focus { border-color: var(--accent); background: var(--surface); }
+    #chat-error { margin-top: .4rem; font-size: .78rem; color: var(--danger); font-family: var(--mono); }
+
+    /* ══════════════════════════════════════
+       ICP
+    ══════════════════════════════════════ */
+    .icp-toolbar { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .icp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .icp-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1.15rem 1.25rem;
+    }
+    .icp-card.wide { grid-column: 1 / -1; }
+    .icp-card h3 { font-size: .85rem; font-weight: 600; margin-bottom: .15rem; }
+    .icp-hint { font-size: .75rem; color: var(--text-muted); margin-bottom: .7rem; }
+    .icp-ta {
+      font-family: var(--mono); font-size: .78rem;
+      width: 100%; padding: .5rem .65rem;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--bg); color: var(--text-primary);
+      resize: vertical; min-height: 72px; outline: none;
+      line-height: 1.5; transition: border-color .14s;
+    }
+    .icp-ta:focus { border-color: var(--accent); background: var(--surface); }
+    .tag-cloud { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .45rem; min-height: 22px; }
+    .tag-pill {
+      font-family: var(--mono); font-size: .68rem;
+      padding: 2px 8px; border-radius: 20px;
+      background: var(--accent-light); border: 1px solid #bfdbfe; color: var(--accent-text);
+    }
+    .icp-alert { margin-top: .75rem; }
+
+    /* ══════════════════════════════════════
+       UTILS
+    ══════════════════════════════════════ */
+    .hidden { display: none !important; }
+    .mono   { font-family: var(--mono); }
+    .muted  { color: var(--text-muted); }
+
+    @media (max-width: 780px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .icp-grid  { grid-template-columns: 1fr; }
+      .expand-inner { grid-template-columns: 1fr; }
+      .editor-grid  { grid-template-columns: 1fr; }
+      .agents { flex-direction: column; }
+      .agent-arrow { transform: rotate(90deg); width: 100%; justify-content: center; height: 24px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Smart Lead Qualifier &amp; Outreach</h1>
-  <p class="sub">Upload a CSV (Leads) or use the Assistant (Chat). API: <code>/api/v1</code></p>
 
-  <nav>
-    <button type="button" class="tab active" data-tab="leads">Leads</button>
-    <button type="button" class="tab" data-tab="chat">Assistant</button>
-    <button type="button" class="tab" data-tab="icp">ICP</button>
+<!-- ═══════ TOP BAR ═══════ -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <div class="brand-mark">SL</div>
+    Smart Leads
+  </div>
+  <div class="topbar-sep"></div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-panel="leads">
+      ⚡ Qualify
+      <span class="tab-count" id="badge-count">0</span>
+    </button>
+    <button class="tab-btn" data-panel="chat">💬 Assistant</button>
+    <button class="tab-btn" data-panel="icp">🎯 ICP</button>
   </nav>
+</header>
 
-  <section id="panel-leads" class="panel visible">
-    <div class="row">
-      <input type="file" id="csv-file" accept=".csv,text/csv" />
-      <button type="button" class="primary" id="btn-process">Run pipeline</button>
-      <div class="row" id="leads-export-row" style="display: none;">
-        <span style="font-size:0.85rem;color:#52525b;">Export last run (server):</span>
-        <a href="#" id="link-export-csv">Download CSV</a>
-        <a href="#" id="link-export-json">Download JSON</a>
+<main class="main">
+
+  <!-- ═══════════════════════════════════════════
+       LEADS PANEL
+  ════════════════════════════════════════════ -->
+  <div class="panel active" id="panel-leads">
+
+    <!-- Agent pipeline -->
+    <div class="pipeline-card">
+      <div class="pipeline-meta">
+        <span class="pipeline-label">Multi-agent pipeline</span>
+        <span class="pipeline-badge" id="pipeline-badge">idle</span>
+      </div>
+      <div class="agents">
+        <div class="agent-node" id="ag-research">
+          <div class="agent-ico">🔍</div>
+          <div class="agent-text">
+            <div class="agent-name">Research Agent</div>
+            <div class="agent-sub" id="ag-research-sub">Web search &amp; data collection</div>
+          </div>
+        </div>
+        <div class="agent-arrow" id="arr-1">›</div>
+        <div class="agent-node" id="ag-score">
+          <div class="agent-ico">📊</div>
+          <div class="agent-text">
+            <div class="agent-name">Scoring Agent</div>
+            <div class="agent-sub" id="ag-score-sub">ICP match &amp; ranking</div>
+          </div>
+        </div>
+        <div class="agent-arrow" id="arr-2">›</div>
+        <div class="agent-node" id="ag-outreach">
+          <div class="agent-ico">✉️</div>
+          <div class="agent-text">
+            <div class="agent-name">Outreach Agent</div>
+            <div class="agent-sub" id="ag-outreach-sub">Personalised email drafts</div>
+          </div>
+        </div>
       </div>
     </div>
-    <div id="leads-status" class="err"></div>
-    <div id="leads-errors" class="err"></div>
-    <div id="leads-progress-bar" aria-live="polite"></div>
-    <div id="leads-table-wrap"></div>
-  </section>
 
-  <section id="panel-chat" class="panel">
-    <p class="sub" style="margin-top:0">Session is kept in <code>localStorage</code> for this browser.</p>
-    <label style="font-size:0.85rem;display:flex;gap:0.35rem;align-items:center;margin:0 0 0.5rem;">
-      <input type="checkbox" id="use-pipeline-ctx" checked />
-      Include last lead run in assistant context (server memory)
-    </label>
-    <div id="chat-log"></div>
-    <textarea id="chat-input" placeholder="Message the assistant…"></textarea>
-    <div class="row">
-      <button type="button" class="primary" id="btn-send">Send</button>
-      <button type="button" id="btn-new-session">New session</button>
+    <!-- Upload -->
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" id="csv-file" accept=".csv,text/csv" />
+      <div class="upload-icon">📂</div>
+      <div class="upload-title">Drop your leads CSV here</div>
+      <div class="upload-hint">or click to browse &nbsp;·&nbsp; expected columns: company_name, website, contact_email</div>
+      <span class="upload-chip hidden" id="file-chip"></span>
     </div>
-    <div id="chat-status" class="err"></div>
-  </section>
 
-  <section id="panel-icp" class="panel">
-    <p class="sub" style="margin-top:0">
-      Ideal Customer Profile used for <strong>scoring</strong>. In-memory until server restart.
-    </p>
-    <div class="row">
-      <button type="button" class="primary" id="btn-icp-load">Load current</button>
-      <button type="button" class="primary" id="btn-icp-save">Save</button>
-      <button type="button" id="btn-icp-reset">Reset to default</button>
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="btn btn-primary" id="btn-process" disabled>▶ Run pipeline</button>
+      <button class="btn" id="btn-export-client" disabled>⬇ Export CSV</button>
+      <div class="export-links" id="export-links">
+        <span>Server export:</span>
+        <a href="#" id="link-export-csv">CSV</a>
+        <a href="#" id="link-export-json">JSON</a>
+      </div>
+      <span class="muted mono" id="run-note" style="font-size:.72rem;"></span>
     </div>
-    <label style="font-size:0.85rem;">Target industries (comma-separated)</label>
-    <textarea id="icp-industries" placeholder="Software, SaaS, …"></textarea>
-    <label style="font-size:0.85rem;">Keywords (comma-separated)</label>
-    <textarea id="icp-keywords" placeholder="cloud, API, …"></textarea>
-    <label style="font-size:0.85rem;">Notes</label>
-    <textarea id="icp-notes" placeholder="Who you sell to…"></textarea>
-    <div id="icp-status" class="err"></div>
-  </section>
 
-  <script>
-    const API = "/api/v1";
-    const LS_KEY = "smartlead_chat_session_id";
+    <!-- Alerts -->
+    <div id="alert-area"></div>
 
-    function tabSwitch(name) {
-      document.querySelectorAll(".tab").forEach((b) => {
-        b.classList.toggle("active", b.dataset.tab === name);
-      });
-      document.getElementById("panel-leads").classList.toggle("visible", name === "leads");
-      document.getElementById("panel-chat").classList.toggle("visible", name === "chat");
-      document.getElementById("panel-icp").classList.toggle("visible", name === "icp");
-    }
+    <!-- Progress -->
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-label" id="progress-label">Starting…</div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
 
-    document.querySelectorAll(".tab").forEach((b) => {
-      b.addEventListener("click", () => tabSwitch(b.dataset.tab));
-    });
+    <!-- Stats (hidden until run completes) -->
+    <div class="stats-row hidden" id="stats-row">
+      <div class="stat-card"><div class="stat-lbl">Total leads</div><div class="stat-val" id="st-total">—</div></div>
+      <div class="stat-card"><div class="stat-lbl">High fit (≥70)</div><div class="stat-val high" id="st-high">—</div></div>
+      <div class="stat-card"><div class="stat-lbl">Avg score</div><div class="stat-val mid" id="st-avg">—</div></div>
+      <div class="stat-card"><div class="stat-lbl">Emails ready</div><div class="stat-val" id="st-emails">—</div></div>
+    </div>
 
-    function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
+    <!-- Filter row (hidden until run completes) -->
+    <div class="filter-row hidden" id="filter-row">
+      <span class="filter-lbl">Filter:</span>
+      <button class="chip active" data-f="all">All</button>
+      <button class="chip" data-f="high">High ≥70</button>
+      <button class="chip" data-f="mid">Mid 40–69</button>
+      <button class="chip" data-f="low">Low &lt;40</button>
+      <input class="search-box" id="lead-search" placeholder="Search company…" />
+    </div>
 
-    const leadsStatus = document.getElementById("leads-status");
-    const leadsErrors = document.getElementById("leads-errors");
-    const leadsWrap = document.getElementById("leads-table-wrap");
-    const progressBar = document.getElementById("leads-progress-bar");
+    <!-- Output area -->
+    <div id="leads-out">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">🎯</div>
+        <div class="empty-title">No leads yet</div>
+        <div class="empty-desc">Upload a CSV and run the pipeline to qualify your leads.</div>
+      </div>
+    </div>
 
-    let lastLeadRows = [];
-    let openFinalEditorIndex = null;
+  </div><!-- /panel-leads -->
 
-    document.getElementById("link-export-csv").addEventListener("click", (e) => {
-      e.preventDefault();
-      window.location.href = API + "/leads/export-csv";
-    });
-    document.getElementById("link-export-json").addEventListener("click", (e) => {
-      e.preventDefault();
-      window.location.href = API + "/leads/export-json";
-    });
 
-    function effectiveRecipientRaw(r) {
-      if (!r) return "";
-      const o = (r.recipient_override || "").trim();
-      if (o) return o;
-      const c = (r.lead && r.lead.contact_email || "").trim();
-      if (c) return c;
-      const d = (r.discovered_contact_email || "").trim();
-      if (d) return d;
-      return "";
-    }
+  <!-- ═══════════════════════════════════════════
+       CHAT PANEL
+  ════════════════════════════════════════════ -->
+  <div class="panel" id="panel-chat">
+    <div class="chat-shell">
+      <div class="chat-head">
+        <div class="chat-head-left">
+          <div class="online-dot"></div>
+          Lead Assistant
+        </div>
+        <div class="chat-head-right">
+          <label class="ctx-toggle">
+            <input type="checkbox" id="use-pipeline-ctx" checked />
+            Include lead context
+          </label>
+          <button class="btn" id="btn-new-session" style="font-size:.78rem;padding:3px 10px;">New session</button>
+        </div>
+      </div>
+      <div class="chat-msgs" id="chat-log">
+        <div class="bubble-wrap">
+          <div class="chat-bubble assistant">Hello! I'm your lead qualification assistant. Ask me anything about your leads, outreach strategy, or ICP fit.</div>
+        </div>
+        <div class="typing" id="typing">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+      <div class="chat-foot">
+        <textarea class="chat-ta" id="chat-input" rows="1" placeholder="Message… (Enter to send, Shift+Enter for newline)"></textarea>
+        <button class="btn btn-primary" id="btn-send" style="height:40px;padding:0 1rem;">Send</button>
+      </div>
+    </div>
+    <div id="chat-error"></div>
+  </div><!-- /panel-chat -->
 
-    function effectiveRecipientLabel(r) {
-      if (!r) return "— none —";
-      const o = (r.recipient_override || "").trim();
-      if (o) return o + " (override)";
-      const c = (r.lead && r.lead.contact_email || "").trim();
-      if (c) return c + " (from CSV)";
-      const d = (r.discovered_contact_email || "").trim();
-      if (d) return d + " (from website)";
-      return "— none — (set below or Send will ask)";
-    }
 
-    function effectiveOutreach(r) {
-      if (r && r.final_outreach && (r.final_outreach.subject || r.final_outreach.body)) {
-        return r.final_outreach;
-      }
-      return (r && r.outreach) || {};
-    }
+  <!-- ═══════════════════════════════════════════
+       ICP PANEL
+  ════════════════════════════════════════════ -->
+  <div class="panel" id="panel-icp">
+    <div class="icp-toolbar">
+      <button class="btn btn-primary" id="btn-icp-load">↻ Load current</button>
+      <button class="btn btn-accent" id="btn-icp-save">✓ Save ICP</button>
+      <button class="btn" id="btn-icp-reset">Reset to default</button>
+    </div>
+    <div id="icp-alert"></div>
+    <div class="icp-grid">
+      <div class="icp-card">
+        <h3>Target industries</h3>
+        <p class="icp-hint">Comma-separated list of industries you're targeting.</p>
+        <textarea class="icp-ta" id="icp-industries" placeholder="Software, SaaS, FinTech, DevTools…"></textarea>
+        <div class="tag-cloud" id="icp-ind-tags"></div>
+      </div>
+      <div class="icp-card">
+        <h3>Keywords</h3>
+        <p class="icp-hint">Terms that signal a strong ICP match.</p>
+        <textarea class="icp-ta" id="icp-keywords" placeholder="cloud, API, enterprise, B2B, automation…"></textarea>
+        <div class="tag-cloud" id="icp-kw-tags"></div>
+      </div>
+      <div class="icp-card wide">
+        <h3>Scoring notes</h3>
+        <p class="icp-hint">Describe your ideal customer in plain language — the scoring agent uses this as context.</p>
+        <textarea class="icp-ta" id="icp-notes" style="min-height:90px;"
+          placeholder="We sell to mid-market SaaS companies with 50–500 employees that are investing in GTM automation…"></textarea>
+      </div>
+    </div>
+  </div><!-- /panel-icp -->
 
-    function parseSseBuffer(buffer, onEvent) {
-      const parts = buffer.split("\n\n");
-      const rest = parts.pop() || "";
-      for (const block of parts) {
-        const line = block.trim().split("\n").find((l) => l.startsWith("data:"));
-        if (!line) continue;
-        const json = line.replace(/^data:\s*/, "");
-        try {
-          onEvent(JSON.parse(json));
-        } catch {}
-      }
-      return rest;
-    }
+</main>
 
-    async function openFinalEditorForIndex(i) {
-      openFinalEditorIndex = i;
-      await renderLeadsTable();
-      requestAnimationFrame(() => {
-        const ed = leadsWrap.querySelector('tr.final-row[data-lead-index="' + i + '"]');
-        if (ed) ed.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      });
-    }
+<script>
+/* ══════════════════════════════════════════════════════════
+   CONSTANTS & STATE
+══════════════════════════════════════════════════════════ */
+const API    = "/api/v1";
+const LS_KEY = "smartlead_chat_session_id";
 
-    async function renderLeadsTable() {
-      const rows = lastLeadRows;
-      if (!rows.length) {
-        leadsWrap.innerHTML = "";
-        return;
-      }
+let lastLeadRows       = [];
+let openEditorIndex    = null;    // which row's edit-draft panel is open
+let currentFilter      = "all";
+let mailConfigured     = false;
 
-      const htmlRows = rows.map((r, i) => {
-        const L = r.lead || {};
-        const R = r.research || {};
-        const S = r.score || {};
-        const F = effectiveOutreach(r);
-        const isFinal = !!(r.final_outreach && (r.final_outreach.subject || r.final_outreach.body));
+/* ══════════════════════════════════════════════════════════
+   TAB SWITCHING
+══════════════════════════════════════════════════════════ */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.panel).classList.add("active");
+  });
+});
 
-        return `
-            <tr data-lead-index="${i}">
-              <td>${escapeHtml(L.company_name || "")}</td>
-              <td>${escapeHtml(L.website || "")}</td>
-              <td>${escapeHtml(R.industry || "")}</td>
-              <td class="num">${escapeHtml(String(S.score ?? ""))}</td>
-              <td>${escapeHtml(effectiveRecipientLabel(r))}</td>
-              <td>${escapeHtml(F.subject || "")}${isFinal ? ' <span style="color:#15803d;font-size:0.7rem;">(final)</span>' : ""}</td>
-              <td>
-                <details>
-                  <summary class="body-summary-readonly">
-                    Email body (${isFinal ? "final" : "auto"}) — click to expand (read-only)
-                  </summary>
-                  <pre class="email-body-readonly">${escapeHtml(F.body || "")}</pre>
-                </details>
-                <details><summary>Research</summary>
-                  <pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(JSON.stringify(R, null, 2))}</pre>
-                </details>
-                <details><summary>Score detail</summary>
-                  <pre style="white-space:pre-wrap;margin:0.25rem 0 0">${escapeHtml(S.rationale || "")}</pre>
-                </details>
-                <div class="row" style="margin-top:0.35rem;">
-                  <button type="button" class="btn-sm copy-outreach-btn" data-lead-index="${i}">Copy email</button>
-                  <button type="button" class="btn-sm regen-btn" data-lead-index="${i}">Regenerate</button>
-                  <button type="button" class="btn-sm open-final-editor-btn" data-lead-index="${i}">Edit draft</button>
+/* ══════════════════════════════════════════════════════════
+   UPLOAD ZONE
+══════════════════════════════════════════════════════════ */
+const uploadZone = document.getElementById("upload-zone");
+const csvInput   = document.getElementById("csv-file");
+const fileChip   = document.getElementById("file-chip");
+const btnProcess = document.getElementById("btn-process");
+
+uploadZone.addEventListener("dragover",  e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+uploadZone.addEventListener("drop", e => {
+  e.preventDefault(); uploadZone.classList.remove("dragover");
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+csvInput.addEventListener("change", () => { if (csvInput.files[0]) setFile(csvInput.files[0]); });
+
+function setFile(f) {
+  fileChip.textContent = "📄 " + f.name;
+  fileChip.classList.remove("hidden");
+  btnProcess.disabled = false;
+}
+
+/* ══════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════ */
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function scoreClass(n) {
+  const v = Number(n);
+  return v >= 70 ? "high" : v >= 40 ? "mid" : "low";
+}
+function scoreColor(n) {
+  const v = Number(n);
+  return v >= 70 ? "#16a34a" : v >= 40 ? "#d97706" : "#dc2626";
+}
+
+const AVATAR_PALETTES = [
+  ["#dbeafe","#1e40af"],["#fce7f3","#9d174d"],["#d1fae5","#065f46"],
+  ["#fef3c7","#92400e"],["#ede9fe","#4c1d95"],["#fee2e2","#991b1b"],
+  ["#e0f2fe","#0c4a6e"],["#f0fdf4","#14532d"],["#fff7ed","#9a3412"],
+];
+function avatarColors(name) {
+  return AVATAR_PALETTES[(name||"?").charCodeAt(0) % AVATAR_PALETTES.length];
+}
+function initials(name) {
+  return (name||"?").split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+}
+
+function showAlert(type, msg, container="alert-area") {
+  const icon = {danger:"⚠",warn:"ℹ",success:"✓"}[type]||"·";
+  document.getElementById(container).innerHTML =
+    `<div class="alert ${type}">${icon} ${esc(msg)}</div>`;
+}
+function clearAlerts(c="alert-area") { document.getElementById(c).innerHTML = ""; }
+
+/* ── Recipient helpers (mirrors backend logic) ── */
+function effectiveRecipientRaw(r) {
+  if (!r) return "";
+  const o = (r.recipient_override || "").trim();   if (o) return o;
+  const c = (r.lead?.contact_email || "").trim();  if (c) return c;
+  const d = (r.discovered_contact_email || "").trim(); if (d) return d;
+  return "";
+}
+function effectiveRecipientLabel(r) {
+  if (!r) return "— none —";
+  const o = (r.recipient_override || "").trim();
+  if (o) return { email: o, tag: "override" };
+  const c = (r.lead?.contact_email || "").trim();
+  if (c) return { email: c, tag: "csv" };
+  const d = (r.discovered_contact_email || "").trim();
+  if (d) return { email: d, tag: "discovered" };
+  return null;
+}
+function effectiveOutreach(r) {
+  if (r?.final_outreach && (r.final_outreach.subject || r.final_outreach.body)) {
+    return r.final_outreach;
+  }
+  return r?.outreach || {};
+}
+
+/* ══════════════════════════════════════════════════════════
+   PIPELINE VISUALISATION
+══════════════════════════════════════════════════════════ */
+function setPipelinePhase(phase) {
+  // phase: idle | research | score | outreach | done
+  const badge = document.getElementById("pipeline-badge");
+  badge.className = "pipeline-badge";
+
+  const order = { idle:-1, research:0, score:1, outreach:2, done:3 };
+  const idx = order[phase] ?? -1;
+
+  if (phase === "done")       { badge.classList.add("done");    badge.textContent = "complete"; }
+  else if (phase !== "idle")  { badge.classList.add("running"); badge.textContent = phase; }
+  else                        { badge.textContent = "idle"; }
+
+  const nodes = ["research","score","outreach"];
+  nodes.forEach((n, i) => {
+    const el  = document.getElementById("ag-" + n);
+    const arr = document.getElementById("arr-" + (i+1));
+    el.classList.remove("active","complete");
+    if (arr) arr.classList.remove("active","complete");
+
+    if (i < idx)      { el.classList.add("complete"); if (arr) arr.classList.add("complete"); }
+    else if (i === idx){ el.classList.add("active");  if (arr) arr.classList.add("active"); }
+  });
+}
+function setAgentSub(phase, msg) {
+  const el = document.getElementById("ag-" + phase + "-sub");
+  if (el && msg) el.textContent = msg;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PROGRESS
+══════════════════════════════════════════════════════════ */
+function setProgress(pct, label) {
+  document.getElementById("progress-wrap").classList.add("visible");
+  document.getElementById("progress-fill").style.width = pct + "%";
+  document.getElementById("progress-label").textContent = label || "";
+}
+function hideProgress() {
+  document.getElementById("progress-wrap").classList.remove("visible");
+}
+
+/* ══════════════════════════════════════════════════════════
+   SSE BUFFER PARSER
+══════════════════════════════════════════════════════════ */
+function parseSseBuffer(buf, onEvent) {
+  const parts = buf.split("\n\n");
+  const rest = parts.pop() || "";
+  for (const block of parts) {
+    const line = block.trim().split("\n").find(l => l.startsWith("data:"));
+    if (!line) continue;
+    try { onEvent(JSON.parse(line.replace(/^data:\s*/, ""))); } catch {}
+  }
+  return rest;
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER LEADS TABLE  (called after every state change)
+══════════════════════════════════════════════════════════ */
+async function renderLeadsTable() {
+  const rows = getFilteredRows();
+  const out  = document.getElementById("leads-out");
+
+  if (!lastLeadRows.length) {
+    out.innerHTML = `<div class="empty-state"><div class="empty-icon">🎯</div>
+      <div class="empty-title">No leads yet</div>
+      <div class="empty-desc">Upload a CSV and run the pipeline to qualify your leads.</div></div>`;
+    return;
+  }
+  if (!rows.length) {
+    out.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div>
+      <div class="empty-title">No leads match this filter</div></div>`;
+    return;
+  }
+
+  const bodyRows = rows.map(({ r, realIdx }) => {
+    const L  = r.lead     || {};
+    const R  = r.research || {};
+    const S  = r.score    || {};
+    const O  = effectiveOutreach(r);
+    const sc = scoreClass(S.score);
+    const isFinal = !!(r.final_outreach && (r.final_outreach.subject || r.final_outreach.body));
+    const [avBg, avFg] = avatarColors(L.company_name || "?");
+    const recipInfo = effectiveRecipientLabel(r);
+    const editorOpen = openEditorIndex === realIdx;
+
+    const recipHTML = recipInfo
+      ? `<span class="recip-main">${esc(recipInfo.email)}<span class="recip-tag">${esc(recipInfo.tag)}</span></span>`
+      : `<span class="recip-none">— none —</span>`;
+
+    const dataRow = `
+      <tr class="data-row" data-ridx="${realIdx}">
+        <td>
+          <div class="co-cell">
+            <div class="co-avatar" style="background:${avBg};color:${avFg}">${initials(L.company_name)}</div>
+            <div>
+              <div class="co-name">${esc(L.company_name||"—")}</div>
+              <div class="co-site">${esc(L.website||"")}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <span style="font-size:.72rem;padding:3px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-secondary);">${esc(R.industry||"—")}</span>
+        </td>
+        <td>
+          <div class="score-wrap">
+            <span class="score-badge ${sc}">${S.score??'—'}</span>
+            <div class="score-track">
+              <div class="score-bar" style="width:${Math.min(Number(S.score)||0,100)}%;background:${scoreColor(S.score)};"></div>
+            </div>
+          </div>
+        </td>
+        <td class="recip-cell">${recipHTML}</td>
+        <td class="subject-cell">
+          <div class="subject-text" title="${esc(O.subject||'')}">
+            ${esc(O.subject||'—')}${isFinal ? '<span class="final-badge">final</span>' : ''}
+          </div>
+        </td>
+        <td>
+          <div class="action-row">
+            <button class="btn-sm js-expand" data-ridx="${realIdx}">Details ${editorOpen?'↑':'↓'}</button>
+            <button class="btn-sm js-copy"   data-ridx="${realIdx}">Copy email</button>
+            <button class="btn-sm js-regen"  data-ridx="${realIdx}">Regenerate</button>
+            <button class="btn-sm btn-sm-primary js-edit" data-ridx="${realIdx}">Edit draft</button>
+          </div>
+        </td>
+        <td class="send-cell">
+          <button class="btn-sm btn-sm-primary js-send" data-ridx="${realIdx}"
+            ${!mailConfigured ? 'disabled title="Set SENDER_EMAIL and GMAIL_SMTP_KEY on server"' : ''}>
+            ✉ Send
+          </button>
+          <div class="send-status" id="send-st-${realIdx}"></div>
+        </td>
+      </tr>`;
+
+    // Expand/detail row (details view)
+    const expandRow = `
+      <tr class="expand-row ${editorOpen?'hidden':''}" id="expand-${realIdx}" style="display:none;">
+        <td colspan="7">
+          <div class="expand-inner">
+            <div class="expand-sec">
+              <h4>Research data</h4>
+              <pre class="expand-pre">${esc(JSON.stringify(R, null, 2))}</pre>
+            </div>
+            <div class="expand-sec">
+              <h4>Score rationale</h4>
+              <pre class="expand-pre">${esc(S.rationale||'—')}</pre>
+            </div>
+            <div class="expand-sec">
+              <h4>Outreach email (${isFinal?'final':'auto-generated'})</h4>
+              <div class="email-card">
+                <div class="email-subj">${esc(O.subject||'—')}</div>
+                <div class="email-body-ro">${esc(O.body||'—')}</div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>`;
+
+    // Inline editor row
+    const editorRow = `
+      <tr class="editor-row ${editorOpen?'':'hidden'}" id="editor-${realIdx}">
+        <td colspan="7">
+          <div class="editor-inner">
+            <div class="editor-title">✏️ Edit draft — lead #${realIdx}</div>
+            <div class="editor-grid">
+              <div class="editor-field">
+                <label>Recipient (To:)</label>
+                <div class="field-row">
+                  <input type="email" class="field-input js-recip-input" data-ridx="${realIdx}"
+                    value="${esc(r.recipient_override || L.contact_email || r.discovered_contact_email || '')}" />
+                  <button class="btn-sm btn-sm-primary js-save-recip" data-ridx="${realIdx}">Save</button>
+                  <span class="inline-status" id="recip-st-${realIdx}"></span>
                 </div>
-              </td>
-              <td class="send-cell">
-                <button type="button"
-                  class="send-outreach-btn primary-sm btn-sm"
-                  data-lead-index="${i}"
-                  ${!(L.contact_email || "").trim() ? 'title="No email in CSV — you will be prompted"' : ""}>
-                  Send email
-                </button>
-                <span class="send-outreach-status" data-lead-index="${i}" style="font-size:0.75rem;margin-left:0.35rem;"></span>
-              </td>
-            </tr>
-            <tr class="final-row ${openFinalEditorIndex === i ? "" : "hidden"}" data-lead-index="${i}">
-              <td colspan="7">
-                <div style="font-size:0.78rem;color:#52525b;margin-bottom:0.25rem;">
-                  <strong>Edit draft</strong> (saved to server on Save)
-                </div>
-                <label style="font-size:0.75rem;">Recipient (To:)</label>
-                <input 
-                  type="email"
-                  class="recipient-override"
-                  data-lead-index="${i}"
-                  style="width:100%;box-sizing:border-box;margin-bottom:0.25rem;"
-                  value="${escapeHtml(
-                    r.recipient_override ||
-                    L.contact_email ||
-                    r.discovered_contact_email ||
-                    ""
-                  )}" 
-                />
-                <button type="button" class="btn-sm primary-sm save-recipient-btn" data-lead-index="${i}">
-                  Save recipient
-                </button>
-                <span class="save-recipient-status" data-lead-index="${i}" style="font-size:0.75rem;margin-left:0.35rem;"></span>
+              </div>
+              <div class="editor-field">
+                <label>Subject</label>
+                <input type="text" class="field-input js-subj-input" data-ridx="${realIdx}"
+                  value="${esc(O.subject||'')}" />
+              </div>
+            </div>
+            <div class="editor-field" style="margin-bottom:.8rem;">
+              <label>Body</label>
+              <textarea class="field-textarea js-body-input" data-ridx="${realIdx}" rows="6">${esc(O.body||'')}</textarea>
+            </div>
+            <div class="editor-actions">
+              <button class="btn btn-accent js-save-draft" data-ridx="${realIdx}">✓ Save final draft</button>
+              <button class="btn js-cancel-editor" data-ridx="${realIdx}">Cancel</button>
+              <span class="inline-status" id="draft-st-${realIdx}"></span>
+            </div>
+          </div>
+        </td>
+      </tr>`;
 
-                <label style="font-size:0.75rem;">Subject</label>
-                <input class="final-subj" data-lead-index="${i}" style="width:100%;box-sizing:border-box;margin-bottom:0.25rem;" value="${escapeHtml(F.subject || "")}" />
-                <label style="font-size:0.75rem;">Body</label>
-                <textarea class="final-body" data-lead-index="${i}" rows="5" style="width:100%;box-sizing:border-box;">${escapeHtml(F.body || "")}</textarea>
-                <button type="button" class="btn-sm primary-sm save-final-btn" data-lead-index="${i}">Save final draft</button>
-                <button type="button" class="btn-sm cancel-final-btn" data-lead-index="${i}">Cancel</button>
-                <span class="save-final-status" data-lead-index="${i}" style="font-size:0.75rem;margin-left:0.35rem;"></span>
-              </td>
-            </tr>`;
-      }).join("");
+    return dataRow + expandRow + editorRow;
+  }).join("");
 
-      leadsWrap.innerHTML = `
-        <table>
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Website</th>
-              <th>Industry</th>
-              <th>Score</th>
-              <th>Recipient</th>
-              <th>Subject</th>
-              <th>Details &amp; actions</th>
-              <th>Send</th>
-            </tr>
-          </thead>
-          <tbody>${htmlRows}</tbody>
-        </table>`;
+  out.innerHTML = `
+    <div class="table-card">
+      <table class="ltable">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Industry</th>
+            <th>Score</th>
+            <th>Recipient</th>
+            <th>Subject</th>
+            <th>Actions</th>
+            <th>Send</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
 
-      leadsWrap.querySelectorAll(".open-final-editor-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const i = parseInt(btn.getAttribute("data-lead-index"), 10);
-          openFinalEditorForIndex(i);
-        });
-      });
+  /* ── Wire up all row-level event handlers ── */
 
-      leadsWrap.querySelectorAll(".cancel-final-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          openFinalEditorIndex = null;
-          renderLeadsTable();
-        });
-      });
-
-      leadsWrap.querySelectorAll(".copy-outreach-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const i = parseInt(btn.getAttribute("data-lead-index"), 10);
-          const r = lastLeadRows[i];
-          const e = effectiveOutreach(r);
-          const text = "Subject: " + (e.subject || "") + "\n\n" + (e.body || "");
-          try {
-            await navigator.clipboard.writeText(text);
-            btn.textContent = "Copied!";
-            setTimeout(() => { btn.textContent = "Copy email"; }, 1500);
-          } catch {
-            alert(text);
-          }
-        });
-      });
-
-      leadsWrap.querySelectorAll(".regen-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const i = parseInt(btn.getAttribute("data-lead-index"), 10);
-          btn.disabled = true;
-          try {
-            const res = await fetch(API + "/leads/" + i + "/regenerate", { method: "POST" });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-              throw new Error(
-                typeof data.detail === "string"
-                  ? data.detail
-                  : JSON.stringify(data.detail || data),
-              );
-            }
-            lastLeadRows[i] = data;
-            openFinalEditorIndex = null;
-            await renderLeadsTable();
-          } catch (e) {
-            alert(String(e));
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
-
-      leadsWrap.querySelectorAll(".save-final-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const i = parseInt(btn.getAttribute("data-lead-index"), 10);
-          const tr = leadsWrap.querySelector(`tr.final-row[data-lead-index="${i}"]`);
-          if (!tr) return;
-          const subj = tr.querySelector(".final-subj").value;
-          const body = tr.querySelector(".final-body").value;
-          const st = leadsWrap.querySelector(`.save-final-status[data-lead-index="${i}"]`);
-          btn.disabled = true;
-          if (st) st.textContent = "";
-          try {
-            const res = await fetch(API + "/leads/" + i + "/final-outreach", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ subject: subj, body: body }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-              throw new Error(
-                typeof data.detail === "string"
-                  ? data.detail
-                  : JSON.stringify(data.detail || data),
-              );
-            }
-            lastLeadRows[i] = data;
-            openFinalEditorIndex = null;
-            if (st) st.textContent = "Saved.";
-            await renderLeadsTable();
-          } catch (e) {
-            if (st) st.textContent = "Error";
-            alert(String(e));
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
-
-      leadsWrap.querySelectorAll(".save-recipient-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const i = parseInt(btn.getAttribute("data-lead-index"), 10);
-          const input = leadsWrap.querySelector(`.recipient-override[data-lead-index="${i}"]`);
-          const status = leadsWrap.querySelector(`.save-recipient-status[data-lead-index="${i}"]`);
-
-          if (!input) return;
-
-          btn.disabled = true;
-          if (status) status.textContent = "";
-
-          try {
-            const res = await fetch(API + "/leads/" + i + "/recipient", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email: input.value.trim() }),
-            });
-
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok) {
-              throw new Error(
-                typeof data.detail === "string"
-                  ? data.detail
-                  : JSON.stringify(data.detail || data)
-              );
-            }
-
-            lastLeadRows[i] = data;
-            if (status) status.textContent = "Saved.";
-
-            await renderLeadsTable();
-          } catch (e) {
-            if (status) status.textContent = "Error";
-            alert(String(e));
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
-
-      let mailConfigured = false;
-      try {
-        const st = await fetch(API + "/leads/outreach-mail-status").then((r) => r.json());
-        mailConfigured = !!st.configured;
-      } catch {}
-
-      leadsWrap.querySelectorAll(".send-outreach-btn").forEach((btn) => {
-        if (!mailConfigured) {
-          btn.disabled = true;
-          btn.title = "Set SENDER_EMAIL and GMAIL_SMTP_KEY on the server.";
-          return;
-        }
-
-        btn.addEventListener("click", async () => {
-          const idx = parseInt(btn.getAttribute("data-lead-index"), 10);
-          const statusEl = leadsWrap.querySelector(
-            `.send-outreach-status[data-lead-index="${idx}"]`,
-          );
-          const row = lastLeadRows[idx];
-          const rawRecipient = effectiveRecipientRaw(row);
-
-          let toEmail = null;
-          if (!rawRecipient) {
-            toEmail = window.prompt("Recipient email:");
-            if (!toEmail || !toEmail.trim()) {
-              if (statusEl) statusEl.textContent = "Cancelled.";
-              return;
-            }
-          }
-
-          btn.disabled = true;
-          if (statusEl) statusEl.textContent = "Sending…";
-
-          try {
-            const payload = { lead_index: idx };
-            if (toEmail) payload.to_email = toEmail.trim();
-
-            const res = await fetch(API + "/leads/send-outreach-email", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok) {
-              throw new Error(
-                typeof data.detail === "string"
-                  ? data.detail
-                  : JSON.stringify(data.detail || data),
-              );
-            }
-
-            if (statusEl) statusEl.textContent = "Sent ✓";
-          } catch (e) {
-            if (statusEl) statusEl.textContent = "Failed";
-            alert(String(e));
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
-    }
-
-    document.getElementById("btn-process").addEventListener("click", async () => {
-      leadsStatus.textContent = "";
-      leadsErrors.textContent = "";
-      leadsWrap.innerHTML = "";
-      progressBar.textContent = "";
-
-      const input = document.getElementById("csv-file");
-      if (!input.files || !input.files[0]) {
-        leadsStatus.textContent = "Choose a CSV file first.";
-        return;
-      }
-
-      const fd = new FormData();
-      fd.append("file", input.files[0]);
-
-      const btn = document.getElementById("btn-process");
-      btn.disabled = true;
-
-      leadsStatus.textContent = "Streaming…";
-      progressBar.textContent = "Starting…";
-
-      const rows = [];
-
-      try {
-        const res = await fetch(API + "/leads/process-stream", {
-          method: "POST",
-          body: fd,
-        });
-
-        if (!res.ok || !res.body) {
-          const text = await res.text();
-          throw new Error(text || "Stream failed");
-        }
-
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buf += dec.decode(value, { stream: true });
-
-          buf = parseSseBuffer(buf, (ev) => {
-            if (ev.event === "start") {
-              progressBar.textContent = "Processing " + ev.total + " lead(s)…";
-            }
-
-            if (ev.event === "step") {
-              progressBar.textContent =
-                ev.message || ev.phase + " " + ev.index + "/" + ev.total + " " + ev.company;
-            }
-
-            if (ev.event === "lead") {
-              rows.push(ev.data);
-            }
-
-            if (ev.event === "complete") {
-              progressBar.textContent = "Done — " + ev.lead_count + " lead(s).";
-              if (ev.errors && ev.errors.length) {
-                leadsErrors.textContent = "Warnings:\n" + ev.errors.join("\n");
-              }
-            }
-          });
-        }
-
-        lastLeadRows = rows;
-        openFinalEditorIndex = null;
-        document.getElementById("leads-export-row").style.display =
-          rows.length ? "flex" : "none";
-
-        await renderLeadsTable();
-
-        leadsStatus.textContent = "Done (" + rows.length + " lead(s)).";
-        leadsStatus.className = "ok";
-      } catch (e) {
-        leadsStatus.textContent = "Stream failed.";
-        leadsErrors.textContent = String(e);
-        progressBar.textContent = "";
-        lastLeadRows = [];
-        document.getElementById("leads-export-row").style.display = "none";
-      } finally {
-        btn.disabled = false;
-      }
+  // Expand / collapse details
+  out.querySelectorAll(".js-expand").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const ridx = parseInt(btn.dataset.ridx);
+      const expandRow = document.getElementById("expand-" + ridx);
+      if (!expandRow) return;
+      const isVisible = expandRow.style.display !== "none";
+      expandRow.style.display = isVisible ? "none" : "table-row";
+      btn.textContent = isVisible ? "Details ↓" : "Details ↑";
     });
+  });
 
-    const chatLog = document.getElementById("chat-log");
-    const chatInput = document.getElementById("chat-input");
-    const chatStatus = document.getElementById("chat-status");
-
-    function appendBubble(role, text) {
-      const div = document.createElement("div");
-      div.className = "bubble " + (role === "user" ? "user" : "assistant");
-      div.innerHTML =
-        "<div class=\"meta\">" +
-        role +
-        "</div><div>" +
-        escapeHtml(text).replace(/\n/g, "<br/>") +
-        "</div>";
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-    async function ensureSession() {
-      let sid = localStorage.getItem(LS_KEY);
-      if (sid) return sid;
-
-      const res = await fetch(API + "/chat/sessions", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(JSON.stringify(data));
-
-      sid = data.session_id;
-      localStorage.setItem(LS_KEY, sid);
-      return sid;
-    }
-
-    document.getElementById("btn-send").addEventListener("click", sendChat);
-
-    async function sendChat() {
-      chatStatus.textContent = "";
-
-      const text = chatInput.value.trim();
-      if (!text) return;
-
-      chatInput.value = "";
-      appendBubble("user", text);
-
-      const btn = document.getElementById("btn-send");
-      btn.disabled = true;
-
+  // Copy email
+  out.querySelectorAll(".js-copy").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const ridx = parseInt(btn.dataset.ridx);
+      const O = effectiveOutreach(lastLeadRows[ridx]);
+      const text = "Subject: " + (O.subject||"") + "\n\n" + (O.body||"");
       try {
-        const sid = await ensureSession();
-        const useCtx = document.getElementById("use-pipeline-ctx").checked;
+        await navigator.clipboard.writeText(text);
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = "Copy email"; }, 1500);
+      } catch { alert(text); }
+    });
+  });
 
-        const res = await fetch(API + "/chat/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_id: sid,
-            message: text,
-            use_pipeline_context: useCtx,
-          }),
-        });
-
+  // Regenerate
+  out.querySelectorAll(".js-regen").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const ridx = parseInt(btn.dataset.ridx);
+      btn.disabled = true; btn.textContent = "Working…";
+      try {
+        const res  = await fetch(API + "/leads/" + ridx + "/regenerate", { method: "POST" });
         const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail||data));
+        lastLeadRows[ridx] = data;
+        openEditorIndex = null;
+        await renderLeadsTable();
+      } catch (e) { alert(String(e)); btn.disabled = false; btn.textContent = "Regenerate"; }
+    });
+  });
 
-        if (!res.ok) {
-          chatStatus.textContent =
-            typeof data.detail === "string"
-              ? data.detail
-              : JSON.stringify(data.detail || data);
-          return;
-        }
-
-        appendBubble("assistant", data.reply || "");
-      } catch (e) {
-        chatStatus.textContent = String(e);
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    document.getElementById("btn-new-session").addEventListener("click", async () => {
-      localStorage.removeItem(LS_KEY);
-      chatLog.innerHTML = "";
-      chatStatus.textContent = "";
-      try {
-        await ensureSession();
-        chatStatus.textContent = "New session ready.";
-        chatStatus.className = "ok";
-      } catch (e) {
-        chatStatus.textContent = String(e);
-        chatStatus.className = "err";
+  // Open editor
+  out.querySelectorAll(".js-edit").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const ridx = parseInt(btn.dataset.ridx);
+      openEditorIndex = (openEditorIndex === ridx) ? null : ridx;
+      await renderLeadsTable();
+      if (openEditorIndex !== null) {
+        const ed = document.getElementById("editor-" + ridx);
+        if (ed) ed.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
     });
+  });
 
-    const icpStatus = document.getElementById("icp-status");
+  // Cancel editor
+  out.querySelectorAll(".js-cancel-editor").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      openEditorIndex = null;
+      await renderLeadsTable();
+    });
+  });
 
-    function splitList(s) {
-      return s.split(",").map((x) => x.trim()).filter(Boolean);
-    }
-
-    async function loadIcp() {
-      icpStatus.textContent = "";
-
+  // Save recipient override
+  out.querySelectorAll(".js-save-recip").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const ridx  = parseInt(btn.dataset.ridx);
+      const input = out.querySelector(".js-recip-input[data-ridx='" + ridx + "']");
+      const st    = document.getElementById("recip-st-" + ridx);
+      btn.disabled = true; if (st) { st.textContent = ""; st.className = "inline-status"; }
       try {
-        const res = await fetch(API + "/icp");
-        const data = await res.json();
-        if (!res.ok) throw new Error(JSON.stringify(data));
-
-        document.getElementById("icp-industries").value =
-          (data.target_industries || []).join(", ");
-
-        document.getElementById("icp-keywords").value =
-          (data.keywords || []).join(", ");
-
-        document.getElementById("icp-notes").value = data.notes || "";
-
-        icpStatus.textContent = "Loaded.";
-        icpStatus.className = "ok";
-      } catch (e) {
-        icpStatus.textContent = String(e);
-        icpStatus.className = "err";
-      }
-    }
-
-    document.getElementById("btn-icp-load").addEventListener("click", loadIcp);
-
-    document.getElementById("btn-icp-save").addEventListener("click", async () => {
-      icpStatus.textContent = "";
-
-      const body = {
-        target_industries: splitList(document.getElementById("icp-industries").value),
-        keywords: splitList(document.getElementById("icp-keywords").value),
-        notes: document.getElementById("icp-notes").value.trim(),
-      };
-
-      try {
-        const res = await fetch(API + "/icp", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+        const res  = await fetch(API + "/leads/" + ridx + "/recipient", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: input.value.trim() })
         });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(JSON.stringify(data));
-
-        icpStatus.textContent = "Saved.";
-        icpStatus.className = "ok";
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail||data));
+        lastLeadRows[ridx] = data;
+        if (st) { st.textContent = "Saved ✓"; st.className = "inline-status ok"; }
+        await renderLeadsTable();
       } catch (e) {
-        icpStatus.textContent = String(e);
-        icpStatus.className = "err";
-      }
+        if (st) { st.textContent = "Error"; st.className = "inline-status err"; }
+        alert(String(e));
+      } finally { btn.disabled = false; }
     });
+  });
 
-    document.getElementById("btn-icp-reset").addEventListener("click", async () => {
-      icpStatus.textContent = "";
+  // Save final draft (subject + body)
+  out.querySelectorAll(".js-save-draft").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const ridx  = parseInt(btn.dataset.ridx);
+      const subj  = out.querySelector(".js-subj-input[data-ridx='" + ridx + "']")?.value || "";
+      const body  = out.querySelector(".js-body-input[data-ridx='" + ridx + "']")?.value || "";
+      const st    = document.getElementById("draft-st-" + ridx);
+      btn.disabled = true; if (st) { st.textContent = ""; st.className = "inline-status"; }
+      try {
+        const res  = await fetch(API + "/leads/" + ridx + "/final-outreach", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: subj, body: body })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail||data));
+        lastLeadRows[ridx] = data;
+        openEditorIndex = null;
+        if (st) { st.textContent = "Saved ✓"; st.className = "inline-status ok"; }
+        await renderLeadsTable();
+      } catch (e) {
+        if (st) { st.textContent = "Error"; st.className = "inline-status err"; }
+        alert(String(e));
+      } finally { btn.disabled = false; }
+    });
+  });
+
+  // Send email
+  out.querySelectorAll(".js-send").forEach(btn => {
+    if (!mailConfigured) return;
+    btn.addEventListener("click", async () => {
+      const ridx = parseInt(btn.dataset.ridx);
+      const st   = document.getElementById("send-st-" + ridx);
+      const rawRecipient = effectiveRecipientRaw(lastLeadRows[ridx]);
+
+      let toEmail = null;
+      if (!rawRecipient) {
+        toEmail = window.prompt("Recipient email (not found automatically):");
+        if (!toEmail?.trim()) { if (st) st.textContent = "Cancelled."; return; }
+      }
+
+      btn.disabled = true;
+      if (st) { st.textContent = "Sending…"; st.className = "send-status"; }
 
       try {
-        const res = await fetch(API + "/icp/reset", { method: "POST" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(JSON.stringify(data));
-
-        document.getElementById("icp-industries").value =
-          (data.target_industries || []).join(", ");
-
-        document.getElementById("icp-keywords").value =
-          (data.keywords || []).join(", ");
-
-        document.getElementById("icp-notes").value = data.notes || "";
-
-        icpStatus.textContent = "Reset to defaults.";
-        icpStatus.className = "ok";
+        const payload = { lead_index: ridx };
+        if (toEmail) payload.to_email = toEmail.trim();
+        const res  = await fetch(API + "/leads/send-outreach-email", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail||data));
+        if (st) { st.textContent = "Sent ✓"; st.className = "send-status ok"; }
       } catch (e) {
-        icpStatus.textContent = String(e);
-        icpStatus.className = "err";
-      }
+        if (st) { st.textContent = "Failed"; st.className = "send-status err"; }
+        alert(String(e));
+      } finally { btn.disabled = false; }
     });
+  });
+}
 
-    loadIcp();
-  </script>
+/* ══════════════════════════════════════════════════════════
+   FILTERING
+══════════════════════════════════════════════════════════ */
+function getFilteredRows() {
+  const query = (document.getElementById("lead-search")?.value || "").toLowerCase();
+  return lastLeadRows
+    .map((r, i) => ({ r, realIdx: i }))
+    .filter(({ r }) => {
+      const s = Number(r.score?.score ?? 0);
+      if (currentFilter === "high" && s < 70) return false;
+      if (currentFilter === "mid"  && (s < 40 || s >= 70)) return false;
+      if (currentFilter === "low"  && s >= 40) return false;
+      if (query && !(r.lead?.company_name||"").toLowerCase().includes(query)) return false;
+      return true;
+    });
+}
+
+document.querySelectorAll(".chip").forEach(c => {
+  c.addEventListener("click", async () => {
+    document.querySelectorAll(".chip").forEach(x => x.classList.remove("active"));
+    c.classList.add("active");
+    currentFilter = c.dataset.f;
+    await renderLeadsTable();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════
+   RUN PIPELINE
+══════════════════════════════════════════════════════════ */
+btnProcess.addEventListener("click", async () => {
+  clearAlerts();
+  if (!csvInput.files?.[0]) { showAlert("warn","Choose a CSV file first."); return; }
+
+  const fd = new FormData();
+  fd.append("file", csvInput.files[0]);
+
+  btnProcess.disabled = true;
+  lastLeadRows = [];
+  openEditorIndex = null;
+  document.getElementById("stats-row").classList.add("hidden");
+  document.getElementById("filter-row").classList.add("hidden");
+  document.getElementById("export-links").classList.remove("visible");
+  document.getElementById("badge-count").textContent = "…";
+  document.getElementById("run-note").textContent = "";
+  document.getElementById("leads-out").innerHTML = "";
+
+  setPipelinePhase("research");
+  setProgress(5, "Starting pipeline…");
+
+  let total = 0;
+
+  try {
+    const res = await fetch(API + "/leads/process-stream", { method: "POST", body: fd });
+    if (!res.ok || !res.body) throw new Error((await res.text()) || "Stream failed");
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      buf = parseSseBuffer(buf, ev => {
+        if (ev.event === "start") {
+          total = ev.total;
+          setProgress(5, `Processing ${total} lead(s)…`);
+        }
+        if (ev.event === "step") {
+          const ph = ev.phase;
+          if (ph === "research") setPipelinePhase("research");
+          else if (ph === "score") setPipelinePhase("score");
+          else if (ph === "outreach") setPipelinePhase("outreach");
+          if (ev.company) setAgentSub(ph, `${ev.company} (${ev.index}/${ev.total})`);
+          const pct = total ? Math.round((ev.index / total) * 88) + 5 : 50;
+          setProgress(pct, ev.message || `${ph} · ${ev.company} · ${ev.index}/${ev.total}`);
+        }
+        if (ev.event === "lead") {
+          lastLeadRows.push(ev.data);
+          document.getElementById("badge-count").textContent = lastLeadRows.length;
+        }
+        if (ev.event === "complete") {
+          setPipelinePhase("done");
+          setProgress(100, `Done — ${ev.lead_count} lead(s) qualified`);
+          if (ev.errors?.length) showAlert("warn", "Warnings: " + ev.errors.join("; "));
+
+          // Stats
+          const scores = lastLeadRows.map(r => Number(r.score?.score ?? 0));
+          const high   = scores.filter(s => s >= 70).length;
+          const avg    = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
+          document.getElementById("st-total").textContent  = lastLeadRows.length;
+          document.getElementById("st-high").textContent   = high;
+          document.getElementById("st-avg").textContent    = avg;
+          document.getElementById("st-emails").textContent = lastLeadRows.filter(r => r.outreach?.body).length;
+          document.getElementById("stats-row").classList.remove("hidden");
+          document.getElementById("filter-row").classList.remove("hidden");
+          document.getElementById("export-links").classList.add("visible");
+          document.getElementById("btn-export-client").disabled = false;
+          document.getElementById("run-note").textContent = `${lastLeadRows.length} leads · ${high} high-fit`;
+
+          renderLeadsTable();
+
+          // Wire search
+          const searchEl = document.getElementById("lead-search");
+          if (searchEl) searchEl.addEventListener("input", renderLeadsTable);
+        }
+      });
+    }
+
+  } catch (e) {
+    setPipelinePhase("idle");
+    showAlert("danger", "Pipeline failed: " + String(e));
+    hideProgress();
+  } finally {
+    btnProcess.disabled = false;
+  }
+
+  // Check mail config
+  try {
+    const st = await fetch(API + "/leads/outreach-mail-status").then(r => r.json());
+    mailConfigured = !!st.configured;
+    await renderLeadsTable(); // re-render to enable send buttons if configured
+  } catch {}
+});
+
+/* ── Client-side CSV export ── */
+document.getElementById("btn-export-client").addEventListener("click", () => {
+  if (!lastLeadRows.length) return;
+  const hdr = ["company_name","website","industry","score","recipient","subject","contact_email"];
+  const lines = [hdr.join(",")];
+  lastLeadRows.forEach(r => {
+    const L=r.lead||{}, R=r.research||{}, S=r.score||{}, O=effectiveOutreach(r);
+    lines.push([L.company_name,L.website,R.industry,S.score,effectiveRecipientRaw(r),O.subject,L.contact_email]
+      .map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(","));
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
+  a.download = "qualified-leads.csv"; a.click();
+});
+
+/* ── Server-side export links ── */
+document.getElementById("link-export-csv").addEventListener("click",  e => { e.preventDefault(); window.location.href = API + "/leads/export-csv"; });
+document.getElementById("link-export-json").addEventListener("click", e => { e.preventDefault(); window.location.href = API + "/leads/export-json"; });
+
+/* ══════════════════════════════════════════════════════════
+   CHAT
+══════════════════════════════════════════════════════════ */
+const chatLog   = document.getElementById("chat-log");
+const chatInput = document.getElementById("chat-input");
+const chatError = document.getElementById("chat-error");
+const typing    = document.getElementById("typing");
+
+function appendBubble(role, text) {
+  const ts  = new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  const div = document.createElement("div");
+  div.className = "bubble-wrap";
+  div.innerHTML = `
+    <div class="chat-bubble ${role}">${esc(text).replace(/\n/g,"<br/>")}</div>
+    <div class="bubble-ts ${role==="user"?"right":""}">${ts}</div>`;
+  chatLog.insertBefore(div, typing);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+async function ensureSession() {
+  let sid = localStorage.getItem(LS_KEY);
+  if (sid) return sid;
+  const res  = await fetch(API + "/chat/sessions", { method: "POST" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  sid = data.session_id;
+  localStorage.setItem(LS_KEY, sid);
+  return sid;
+}
+
+async function sendChat() {
+  chatError.textContent = "";
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = ""; chatInput.style.height = "auto";
+  appendBubble("user", text);
+  document.getElementById("btn-send").disabled = true;
+  typing.classList.add("visible");
+  chatLog.scrollTop = chatLog.scrollHeight;
+  try {
+    const sid    = await ensureSession();
+    const useCtx = document.getElementById("use-pipeline-ctx").checked;
+    const res    = await fetch(API + "/chat/messages", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sid, message: text, use_pipeline_context: useCtx })
+    });
+    const data = await res.json().catch(() => ({}));
+    typing.classList.remove("visible");
+    if (!res.ok) { chatError.textContent = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail||data); return; }
+    appendBubble("assistant", data.reply || "");
+  } catch (e) {
+    typing.classList.remove("visible");
+    chatError.textContent = String(e);
+  } finally {
+    document.getElementById("btn-send").disabled = false;
+  }
+}
+
+document.getElementById("btn-send").addEventListener("click", sendChat);
+chatInput.addEventListener("keydown", e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+chatInput.addEventListener("input", function() { this.style.height="auto"; this.style.height=Math.min(this.scrollHeight,120)+"px"; });
+
+document.getElementById("btn-new-session").addEventListener("click", async () => {
+  localStorage.removeItem(LS_KEY);
+  chatError.textContent = "";
+  chatLog.innerHTML = `
+    <div class="bubble-wrap"><div class="chat-bubble assistant">New session started. How can I help?</div></div>
+    <div class="typing" id="typing">
+      <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+    </div>`;
+});
+
+/* ══════════════════════════════════════════════════════════
+   ICP
+══════════════════════════════════════════════════════════ */
+function renderTagCloud(inputId, previewId) {
+  const tags = document.getElementById(inputId).value.split(",").map(x=>x.trim()).filter(Boolean);
+  document.getElementById(previewId).innerHTML = tags.map(t=>`<span class="tag-pill">${esc(t)}</span>`).join("");
+}
+document.getElementById("icp-industries").addEventListener("input", () => renderTagCloud("icp-industries","icp-ind-tags"));
+document.getElementById("icp-keywords").addEventListener("input",   () => renderTagCloud("icp-keywords","icp-kw-tags"));
+
+async function loadIcp() {
+  document.getElementById("icp-alert").innerHTML = "";
+  try {
+    const res  = await fetch(API + "/icp");
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    document.getElementById("icp-industries").value = (data.target_industries||[]).join(", ");
+    document.getElementById("icp-keywords").value   = (data.keywords||[]).join(", ");
+    document.getElementById("icp-notes").value      = data.notes || "";
+    renderTagCloud("icp-industries","icp-ind-tags");
+    renderTagCloud("icp-keywords","icp-kw-tags");
+    showAlert("success","ICP loaded.","icp-alert");
+  } catch (e) { showAlert("danger", String(e), "icp-alert"); }
+}
+
+document.getElementById("btn-icp-load").addEventListener("click", loadIcp);
+
+document.getElementById("btn-icp-save").addEventListener("click", async () => {
+  document.getElementById("icp-alert").innerHTML = "";
+  const body = {
+    target_industries: document.getElementById("icp-industries").value.split(",").map(x=>x.trim()).filter(Boolean),
+    keywords:          document.getElementById("icp-keywords").value.split(",").map(x=>x.trim()).filter(Boolean),
+    notes:             document.getElementById("icp-notes").value.trim()
+  };
+  try {
+    const res  = await fetch(API + "/icp", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    showAlert("success","ICP saved.","icp-alert");
+  } catch (e) { showAlert("danger", String(e), "icp-alert"); }
+});
+
+document.getElementById("btn-icp-reset").addEventListener("click", async () => {
+  document.getElementById("icp-alert").innerHTML = "";
+  try {
+    const res  = await fetch(API + "/icp/reset", { method:"POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    document.getElementById("icp-industries").value = (data.target_industries||[]).join(", ");
+    document.getElementById("icp-keywords").value   = (data.keywords||[]).join(", ");
+    document.getElementById("icp-notes").value      = data.notes || "";
+    renderTagCloud("icp-industries","icp-ind-tags");
+    renderTagCloud("icp-keywords","icp-kw-tags");
+    showAlert("success","Reset to defaults.","icp-alert");
+  } catch (e) { showAlert("danger", String(e), "icp-alert"); }
+});
+
+loadIcp();
+</script>
 </body>
 </html>
