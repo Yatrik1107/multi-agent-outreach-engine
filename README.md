@@ -165,7 +165,7 @@ SMTP is configured so users can send the current effective outreach directly fro
 - in-memory pipeline context
 - email discovery
 - LLM provider factory
-- optional SMTP send
+- SMTP send
 
 ---
 
