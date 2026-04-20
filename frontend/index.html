@@ -778,6 +778,8 @@
   ════════════════════════════════════════════ -->
   <div class="panel" id="panel-icp">
     <div class="icp-toolbar">
+      <select class="btn" id="icp-template-select" title="Industry template"></select>
+      <button class="btn" id="btn-icp-apply-template">Apply industry defaults</button>
       <button class="btn btn-primary" id="btn-icp-load">↻ Load current</button>
       <button class="btn btn-accent" id="btn-icp-save">✓ Save ICP</button>
       <button class="btn" id="btn-icp-reset">Reset to default</button>
@@ -1586,22 +1588,85 @@ function renderTagCloud(inputId, previewId) {
 document.getElementById("icp-industries").addEventListener("input", () => renderTagCloud("icp-industries","icp-ind-tags"));
 document.getElementById("icp-keywords").addEventListener("input",   () => renderTagCloud("icp-keywords","icp-kw-tags"));
 
+function parseIcpPayload(data) {
+  if (data && typeof data === "object" && data.icp) {
+    return {
+      active_template_id: data.active_template_id || "",
+      target_industries: data.icp.target_industries || [],
+      keywords: data.icp.keywords || [],
+      notes: data.icp.notes || ""
+    };
+  }
+  return {
+    active_template_id: (data && data.active_template_id) || "",
+    target_industries: (data && data.target_industries) || [],
+    keywords: (data && data.keywords) || [],
+    notes: (data && data.notes) || ""
+  };
+}
+
+function fillIcpForm(state) {
+  document.getElementById("icp-industries").value = (state.target_industries || []).join(", ");
+  document.getElementById("icp-keywords").value = (state.keywords || []).join(", ");
+  document.getElementById("icp-notes").value = state.notes || "";
+  if (state.active_template_id) {
+    document.getElementById("icp-template-select").value = state.active_template_id;
+  }
+  renderTagCloud("icp-industries", "icp-ind-tags");
+  renderTagCloud("icp-keywords", "icp-kw-tags");
+}
+
+async function loadIcpTemplates() {
+  const select = document.getElementById("icp-template-select");
+  select.innerHTML = "";
+  const res = await fetch(API + "/icp/templates");
+  const data = await res.json();
+  if (!res.ok) throw new Error(JSON.stringify(data));
+
+  (data || []).forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.label;
+    if (t.description) opt.title = t.description;
+    select.appendChild(opt);
+  });
+}
+
 async function loadIcp() {
   document.getElementById("icp-alert").innerHTML = "";
   try {
-    const res  = await fetch(API + "/icp");
+    await loadIcpTemplates();
+    const res  = await fetch(API + "/icp/state");
     const data = await res.json();
     if (!res.ok) throw new Error(JSON.stringify(data));
-    document.getElementById("icp-industries").value = (data.target_industries||[]).join(", ");
-    document.getElementById("icp-keywords").value   = (data.keywords||[]).join(", ");
-    document.getElementById("icp-notes").value      = data.notes || "";
-    renderTagCloud("icp-industries","icp-ind-tags");
-    renderTagCloud("icp-keywords","icp-kw-tags");
+    fillIcpForm(parseIcpPayload(data));
     showAlert("success","ICP loaded.","icp-alert");
   } catch (e) { showAlert("danger", String(e), "icp-alert"); }
 }
 
 document.getElementById("btn-icp-load").addEventListener("click", loadIcp);
+
+document.getElementById("btn-icp-apply-template").addEventListener("click", async () => {
+  document.getElementById("icp-alert").innerHTML = "";
+  const templateId = document.getElementById("icp-template-select").value;
+  if (!templateId) {
+    showAlert("warn", "Select an industry template first.", "icp-alert");
+    return;
+  }
+  try {
+    const res = await fetch(API + "/icp/apply-template", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ template_id: templateId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data));
+    fillIcpForm(parseIcpPayload(data));
+    showAlert("success", "Industry defaults applied. You can tweak and save.", "icp-alert");
+  } catch (e) {
+    showAlert("danger", String(e), "icp-alert");
+  }
+});
 
 document.getElementById("btn-icp-save").addEventListener("click", async () => {
   document.getElementById("icp-alert").innerHTML = "";
@@ -1624,11 +1689,7 @@ document.getElementById("btn-icp-reset").addEventListener("click", async () => {
     const res  = await fetch(API + "/icp/reset", { method:"POST" });
     const data = await res.json();
     if (!res.ok) throw new Error(JSON.stringify(data));
-    document.getElementById("icp-industries").value = (data.target_industries||[]).join(", ");
-    document.getElementById("icp-keywords").value   = (data.keywords||[]).join(", ");
-    document.getElementById("icp-notes").value      = data.notes || "";
-    renderTagCloud("icp-industries","icp-ind-tags");
-    renderTagCloud("icp-keywords","icp-kw-tags");
+    fillIcpForm(parseIcpPayload(data));
     showAlert("success","Reset to defaults.","icp-alert");
   } catch (e) { showAlert("danger", String(e), "icp-alert"); }
 });
