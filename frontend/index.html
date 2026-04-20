@@ -637,10 +637,10 @@
 
     <!-- Upload -->
     <div class="upload-zone" id="upload-zone">
-      <input type="file" id="csv-file" accept=".csv,text/csv" />
+      <input type="file" id="csv-file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
       <div class="upload-icon">📂</div>
-      <div class="upload-title">Drop your leads CSV here</div>
-      <div class="upload-hint">or click to browse &nbsp;·&nbsp; expected columns: company_name, website, contact_email</div>
+      <div class="upload-title">Drop your leads CSV or Excel here</div>
+      <div class="upload-hint">or click to browse &nbsp;·&nbsp; supports CSV, XLSX, XLS · expected columns: company_name, website, contact_email</div>
       <span class="upload-chip hidden" id="file-chip"></span>
     </div>
 
@@ -651,6 +651,7 @@
       <div class="export-links" id="export-links">
         <span>Server export:</span>
         <a href="#" id="link-export-csv">CSV</a>
+        <a href="#" id="link-export-xlsx">Excel</a>
         <a href="#" id="link-export-json">JSON</a>
       </div>
       <span class="muted mono" id="run-note" style="font-size:.72rem;"></span>
@@ -688,7 +689,7 @@
       <div class="empty-state" id="empty-state">
         <div class="empty-icon">🎯</div>
         <div class="empty-title">No leads yet</div>
-        <div class="empty-desc">Upload a CSV and run the pipeline to qualify your leads.</div>
+        <div class="empty-desc">Upload a CSV or Excel file and run the pipeline to qualify your leads.</div>
       </div>
     </div>
 
@@ -798,15 +799,22 @@ const csvInput   = document.getElementById("csv-file");
 const fileChip   = document.getElementById("file-chip");
 const btnProcess = document.getElementById("btn-process");
 
-uploadZone.addEventListener("dragover",  e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+uploadZone.addEventListener("dragover",  e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; uploadZone.classList.add("dragover"); });
 uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
 uploadZone.addEventListener("drop", e => {
   e.preventDefault(); uploadZone.classList.remove("dragover");
   if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+  const files = e.dataTransfer?.files;
+  if (!files || !files.length) return;
+
+  setFile(files[0]); // single file support
 });
 csvInput.addEventListener("change", () => { if (csvInput.files[0]) setFile(csvInput.files[0]); });
 
 function setFile(f) {
+  const dt = new DataTransfer();
+  dt.items.add(f);
+  csvInput.files = dt.files;
   fileChip.textContent = "📄 " + f.name;
   fileChip.classList.remove("hidden");
   btnProcess.disabled = false;
@@ -1269,7 +1277,7 @@ document.querySelectorAll(".chip").forEach(c => {
 ══════════════════════════════════════════════════════════ */
 btnProcess.addEventListener("click", async () => {
   clearAlerts();
-  if (!csvInput.files?.[0]) { showAlert("warn","Choose a CSV file first."); return; }
+  if (!csvInput.files?.[0]) { showAlert("warn","Choose a CSV or Excel file first."); return; }
 
   const fd = new FormData();
   fd.append("file", csvInput.files[0]);
@@ -1390,6 +1398,7 @@ document.getElementById("btn-export-client").addEventListener("click", () => {
 
 /* ── Server-side export links ── */
 document.getElementById("link-export-csv").addEventListener("click",  e => { e.preventDefault(); window.location.href = API + "/leads/export-csv"; });
+document.getElementById("link-export-xlsx").addEventListener("click", e => { e.preventDefault(); window.location.href = API + "/leads/export-xlsx";});
 document.getElementById("link-export-json").addEventListener("click", e => { e.preventDefault(); window.location.href = API + "/leads/export-json"; });
 
 /* ══════════════════════════════════════════════════════════

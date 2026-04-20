@@ -2,6 +2,8 @@ import csv
 import io
 import json
 
+from openpyxl import Workbook
+
 from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
@@ -15,6 +17,10 @@ from smartlead.api.v1.schemas.leads import (
 )
 from smartlead.core.settings import Settings, get_settings
 from smartlead.services.csv_ingest import parse_leads_csv, parse_leads_csv_bytes
+from smartlead.services.excel_ingest import (
+    parse_leads_xlsx_bytes,
+    parse_leads_xls_bytes,
+)
 from smartlead.services.gmail_outreach import send_plain_email
 from smartlead.services.icp_store import get_active_icp
 from smartlead.services.pipeline import iter_pipeline_events, run_pipeline, run_single_lead
@@ -33,6 +39,25 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
+def _get_ext(filename: str | None) -> str:
+    return (filename or "").lower().rsplit(".", 1)[-1] if filename and "." in filename else ""
+
+
+def parse_leads_upload_bytes(filename: str | None, raw: bytes):
+    ext = _get_ext(filename)
+
+    if ext == "csv":
+        return parse_leads_csv_bytes(raw)
+    if ext == "xlsx":
+        return parse_leads_xlsx_bytes(raw)
+    if ext == "xls":
+        return parse_leads_xls_bytes(raw)
+
+    return [], ["Unsupported file type. Upload .csv, .xlsx, or .xls."]
+
+async def parse_leads_upload(file: UploadFile):
+    raw = await file.read()
+    return parse_leads_upload_bytes(file.filename, raw)
 
 @router.get("/context")
 def get_pipeline_context_status() -> dict[str, bool | int]:
@@ -232,8 +257,20 @@ async def process_leads_csv(
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
 ) -> LeadsProcessResponse:
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Please upload a .csv file.")
+    ext = _get_ext(file.filename)
+    if ext not in {"csv", "xlsx", "xls"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a .csv, .xlsx, or .xls file.",
+        )
+    
+    if file.content_type and file.content_type not in {
+        "text/csv",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }:
+        # optional: log instead of failing
+        print(f"Warning: unexpected content-type {file.content_type}")
 
     if not settings.use_mock_llm and not settings.has_active_llm_credentials:
         raise HTTPException(
@@ -241,7 +278,7 @@ async def process_leads_csv(
             detail=settings.live_llm_config_error_detail(),
         )
 
-    leads, parse_errors = await parse_leads_csv(file)
+    leads, parse_errors = await parse_leads_upload(file)
     if not leads:
         raise HTTPException(
             status_code=400,
@@ -264,9 +301,21 @@ async def process_leads_csv_stream(
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Please upload a .csv file.")
+    ext = _get_ext(file.filename)
+    if ext not in {"csv", "xlsx", "xls"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a .csv, .xlsx, or .xls file.",
+        )
 
+    if file.content_type and file.content_type not in {
+        "text/csv",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }:
+        # optional: log instead of failing
+        print(f"Warning: unexpected content-type {file.content_type}")
+        
     if not settings.use_mock_llm and not settings.has_active_llm_credentials:
         raise HTTPException(
             status_code=503,
@@ -274,7 +323,7 @@ async def process_leads_csv_stream(
         )
 
     raw = await file.read()
-    leads, parse_errors = parse_leads_csv_bytes(raw)
+    leads, parse_errors = parse_leads_upload_bytes(file.filename, raw)
     if not leads:
         raise HTTPException(
             status_code=400,
@@ -317,3 +366,54 @@ def save_recipient_override(
         return patch_recipient_override(lead_index, body.email)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
+@router.get("/export-xlsx")
+def export_last_run_xlsx() -> Response:
+    rows = get_last_lead_results()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No results. Run the pipeline first.")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "smartlead_last_run"
+
+    headers = [
+        "company_name",
+        "website",
+        "contact_email",
+        "csv_email",
+        "discovered_email",
+        "recipient_override",
+        "recipient_effective",
+        "score",
+        "subject",
+        "body",
+        "is_final_edited",
+    ]
+    ws.append(headers)
+
+    for r in rows:
+        o = r.effective_outreach()
+        ws.append([
+            r.lead.company_name,
+            r.lead.website,
+            r.lead.contact_email,
+            r.lead.contact_email,
+            r.discovered_contact_email or "",
+            r.recipient_override or "",
+            r.effective_recipient(),
+            r.score.score,
+            o.subject,
+            o.body,
+            "yes" if r.final_outreach is not None else "no",
+        ])
+
+    out = io.BytesIO()
+    wb.save(out)
+    data = out.getvalue()
+
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="smartlead_last_run.xlsx"'},
+    )

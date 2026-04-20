@@ -2,7 +2,7 @@
 
 A lightweight multi-agent sales intelligence POC built with **FastAPI** that helps teams go from a raw lead list to a prioritized, personalized outreach workflow.
 
-This system takes a CSV of companies, researches each lead, scores it against an Ideal Customer Profile (ICP), drafts personalized outreach, and lets a human review/edit before export or send.
+This system takes a CSV,XLSX, or XLS of companies, researches each lead, scores it against an Ideal Customer Profile (ICP), drafts personalized outreach, and lets a human review/edit before export or send.
 
 ---
 
@@ -12,7 +12,7 @@ This POC demonstrates how AI can support an early-stage lead qualification workf
 
 ### Core flow
 
-1. **Upload leads** from a CSV file.
+1. **Upload leads** from a CSV,XLSX, or XLS file.
 2. **Research Agent** gathers public company context.
 3. **Scoring Agent** evaluates fit against a configurable ICP.
 4. **Outreach Agent** drafts personalized outreach emails.
@@ -39,8 +39,8 @@ It is intentionally lightweight, but the flow is real and functional.
 
 ## Key Capabilities
 
-### 1. CSV lead ingestion
-Upload a lead list from the UI using a simple CSV file.
+### 1. CSV,XLSX, or XLS lead ingestion
+Upload a lead list from the UI using a simple CSV,XLSX, or XLS file.
 
 Supported column aliases include:
 
@@ -102,12 +102,12 @@ The UI shows which recipient will be used for each lead.
 Recipient resolution order:
 
 1. manually overridden recipient
-2. CSV `contact_email`
+2. CSV,XLSX, or XLS `contact_email`
 3. discovered email from website
 4. prompt user during send if no email is available
 
 ### 7. Single-lead regeneration
-Users can regenerate one lead at a time without re-uploading the full CSV.
+Users can regenerate one lead at a time without re-uploading the full CSV,XLSX, or XLS.
 
 This allows fast iteration when:
 
@@ -120,6 +120,7 @@ Users can export the last run as:
 
 - CSV
 - JSON
+- XLSX
 
 Export includes:
 
@@ -159,7 +160,7 @@ SMTP is configured so users can send the current effective outreach directly fro
 - `ChatAgent`
 
 ### Supporting services
-- CSV ingestion
+- CSV,XLSX, or XLS ingestion
 - pipeline orchestration
 - ICP store
 - in-memory pipeline context
@@ -174,41 +175,62 @@ SMTP is configured so users can send the current effective outreach directly fro
 ```text
 SmartLeadEngine/
 ├── frontend/
-│   └── index.html
-├── smartlead/
-│   ├── agents/
-│   │   ├── chat_agent.py
-│   │   ├── outreach_agent.py
-│   │   ├── research_agent.py
-│   │   └── scoring_agent.py
-│   ├── api/
-│   │   └── v1/
-│   │       ├── endpoints/
-│   │       │   ├── chat.py
-│   │       │   ├── health.py
-│   │       │   ├── icp.py
-│   │       │   └── leads.py
-│   │       └── schemas/
-│   │           ├── chat.py
-│   │           └── leads.py
-│   ├── core/
-│   │   └── settings.py
-│   ├── services/
-│   │   ├── csv_ingest.py
-│   │   ├── email_discovery.py
-│   │   ├── gemini_llm.py
-│   │   ├── openai_llm.py
-│   │   ├── grok_llm.py
-│   │   ├── icp.py
-│   │   ├── icp_store.py
-│   │   ├── llm_factory.py
-│   │   ├── pipeline.py
-│   │   ├── pipeline_context.py
-│   │   └── tavily_search.py
-│   └── main.py
-├── test_leads.csv
-├── test_leads_alt.csv
-├── test_real_data.csv
+│   ├── app.js
+│   ├── assets
+│   │   └── style.css
+│   └── index.html
+├── README.md
+├── Real_Data.xlsx
 ├── requirements.txt
-├── Dockerfile
-└── docker-compose.yml
+├── smartlead
+│   ├── agents
+│   │   ├── base.py
+│   │   ├── chat_agent.py
+│   │   ├── __init__.py
+│   │   ├── outreach_agent.py
+│   │   ├── research_agent.py
+│   │   └── scoring_agent.py
+│   ├── api
+│   │   └── v1
+│   │       ├── endpoints
+│   │       │   ├── chat.py
+│   │       │   ├── health.py
+│   │       │   ├── icp.py
+│   │       │   ├── __init__.py
+│   │       │   └── leads.py
+│   │       ├── __init__.py
+│   │       ├── router.py
+│   │       └── schemas
+│   │           ├── chat.py
+│   │           ├── __init__.py
+│   │           ├── leads.py
+│   │           ├── pipeline.py
+│   │           └── upload.py
+│   ├── core
+│   │   ├── __init__.py
+│   │   └── settings.py
+│   ├── __init__.py
+│   ├── main.py
+│   ├── services
+│   │   ├── chat_session.py
+│   │   ├── csv_ingest.py
+│   │   ├── email_discovery.py
+│   │   ├── excel_ingest.py
+│   │   ├── gemini_llm.py
+│   │   ├── gmail_outreach.py
+│   │   ├── grok_llm.py
+│   │   ├── icp.py
+│   │   ├── icp_store.py
+│   │   ├── __init__.py
+│   │   ├── leads_ingest.py
+│   │   ├── llm_factory.py
+│   │   ├── openai_llm.py
+│   │   ├── pipeline_context.py
+│   │   ├── pipeline.py
+│   │   └── tavily_search.py
+│   └── utils
+│       ├── helpers.py
+│       └── __init__.py
+├── test_leads_alt.csv
+├── test_leads.csv
+└── test_real_data.csv
