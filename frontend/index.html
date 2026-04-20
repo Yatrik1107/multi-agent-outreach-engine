@@ -233,21 +233,6 @@
     .btn-sm-primary:hover { background: #dbeafe; }
     .btn-sm-danger  { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
 
-    .export-links {
-      display: none; align-items: center; gap: .5rem;
-      font-size: .8rem;
-    }
-    .export-links.visible { display: flex; }
-    .export-links span { color: var(--text-muted); }
-    .export-links a {
-      color: var(--accent-text); text-decoration: none;
-      font-family: var(--mono); font-size: .75rem;
-      padding: 2px 8px; border-radius: 5px;
-      background: var(--accent-light); border: 1px solid #bfdbfe;
-      transition: background .12s;
-    }
-    .export-links a:hover { background: #dbeafe; }
-
     /* ══════════════════════════════════════
        ALERTS
     ══════════════════════════════════════ */
@@ -647,14 +632,17 @@
     <!-- Toolbar -->
     <div class="toolbar">
       <button class="btn btn-primary" id="btn-process" disabled>▶ Run pipeline</button>
-      <button class="btn" id="btn-export-client" disabled>⬇ Export CSV</button>
-      <div class="export-links" id="export-links">
-        <span>Server export:</span>
-        <a href="#" id="link-export-csv">CSV</a>
-        <a href="#" id="link-export-xlsx">Excel</a>
-        <a href="#" id="link-export-json">JSON</a>
-      </div>
+
+      <label class="mono muted" for="export-format" style="font-size:.72rem;">Export</label>
+      <select id="export-format" class="btn" disabled style="padding:.38rem .75rem;">
+        <option value="csv">CSV</option>
+        <option value="xlsx">Excel (.xlsx)</option>
+        <option value="json">JSON</option>
+      </select>
+      <button class="btn" id="btn-export" disabled>⬇ Download</button>
+      
       <span class="muted mono" id="run-note" style="font-size:.72rem;"></span>
+
     </div>
 
     <!-- Alerts -->
@@ -947,7 +935,7 @@ async function renderLeadsTable() {
   if (!lastLeadRows.length) {
     out.innerHTML = `<div class="empty-state"><div class="empty-icon">🎯</div>
       <div class="empty-title">No leads yet</div>
-      <div class="empty-desc">Upload a CSV and run the pipeline to qualify your leads.</div></div>`;
+      <div class="empty-desc">Upload a CSV or Excel file and run the pipeline to qualify your leads.</div></div>`;
     return;
   }
   if (!rows.length) {
@@ -1287,7 +1275,8 @@ btnProcess.addEventListener("click", async () => {
   openEditorIndex = null;
   document.getElementById("stats-row").classList.add("hidden");
   document.getElementById("filter-row").classList.add("hidden");
-  document.getElementById("export-links").classList.remove("visible");
+  document.getElementById("export-format").disabled = true;
+  document.getElementById("btn-export").disabled = true;
   document.getElementById("badge-count").textContent = "…";
   document.getElementById("run-note").textContent = "";
   document.getElementById("leads-out").innerHTML = "";
@@ -1352,8 +1341,8 @@ btnProcess.addEventListener("click", async () => {
           document.getElementById("st-emails").textContent = lastLeadRows.filter(r => r.outreach?.body).length;
           document.getElementById("stats-row").classList.remove("hidden");
           document.getElementById("filter-row").classList.remove("hidden");
-          document.getElementById("export-links").classList.add("visible");
-          document.getElementById("btn-export-client").disabled = false;
+          document.getElementById("export-format").disabled = false;
+          document.getElementById("btn-export").disabled = false;
           document.getElementById("run-note").textContent = `${lastLeadRows.length} leads · ${high} high-fit`;
 
           renderLeadsTable();
@@ -1381,26 +1370,18 @@ btnProcess.addEventListener("click", async () => {
   } catch {}
 });
 
-/* ── Client-side CSV export ── */
-document.getElementById("btn-export-client").addEventListener("click", () => {
+document.getElementById("btn-export").addEventListener("click", () => {
   if (!lastLeadRows.length) return;
-  const hdr = ["company_name","website","industry","score","recipient","subject","contact_email"];
-  const lines = [hdr.join(",")];
-  lastLeadRows.forEach(r => {
-    const L=r.lead||{}, R=r.research||{}, S=r.score||{}, O=effectiveOutreach(r);
-    lines.push([L.company_name,L.website,R.industry,S.score,effectiveRecipientRaw(r),O.subject,L.contact_email]
-      .map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(","));
-  });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
-  a.download = "qualified-leads.csv"; a.click();
+
+  const format = document.getElementById("export-format").value;
+  if (format === "xlsx") {
+    window.location.href = API + "/leads/export-xlsx";
+  } else if (format === "json") {
+    window.location.href = API + "/leads/export-json";
+  } else {
+    window.location.href = API + "/leads/export-csv";
+  }
 });
-
-/* ── Server-side export links ── */
-document.getElementById("link-export-csv").addEventListener("click",  e => { e.preventDefault(); window.location.href = API + "/leads/export-csv"; });
-document.getElementById("link-export-xlsx").addEventListener("click", e => { e.preventDefault(); window.location.href = API + "/leads/export-xlsx";});
-document.getElementById("link-export-json").addEventListener("click", e => { e.preventDefault(); window.location.href = API + "/leads/export-json"; });
-
 /* ══════════════════════════════════════════════════════════
    CHAT
 ══════════════════════════════════════════════════════════ */
