@@ -194,6 +194,19 @@
       background: var(--accent-light); color: var(--accent-text);
       border: 1px solid #bfdbfe; padding: 2px 10px; border-radius: 20px;
     }
+    #run-note {
+      display: inline-flex;
+      align-items: center;
+      line-height: 1;
+    }
+
+    #export-ready-chip {
+      display: inline-flex;
+      align-items: center;
+      line-height: 1;
+      margin-top: 0;          /* overrides .upload-chip default margin-top */
+      vertical-align: middle; /* fallback alignment */
+    }
 
     /* ══════════════════════════════════════
        TOOLBAR
@@ -559,6 +572,42 @@
       .agents { flex-direction: column; }
       .agent-arrow { transform: rotate(90deg); width: 100%; justify-content: center; height: 24px; }
     }
+
+    .export-group {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .export-group .export-format {
+      border: none;
+      border-right: 1px solid var(--border);
+      border-radius: 0;
+      min-width: 150px;
+      background: transparent;
+    }
+    .export-group .export-btn {
+      border: none;
+      border-radius: 0;
+    }
+    .export-group:has(.export-format:disabled) {
+      opacity: .55;
+    }
+    .agent-node.active {
+      box-shadow: 0 0 0 2px rgba(30,64,175,.10) inset;
+    }
+    .pipeline-badge.running::before {
+      content: "● ";
+      font-size: .62rem;
+      vertical-align: middle;
+    }
+    .pipeline-badge.done::before {
+      content: "✓ ";
+    }
+
+
   </style>
 </head>
 <body>
@@ -634,14 +683,17 @@
       <button class="btn btn-primary" id="btn-process" disabled>▶ Run pipeline</button>
 
       <label class="mono muted" for="export-format" style="font-size:.72rem;">Export</label>
-      <select id="export-format" class="btn" disabled style="padding:.38rem .75rem;">
-        <option value="csv">CSV</option>
-        <option value="xlsx">Excel (.xlsx)</option>
-        <option value="json">JSON</option>
-      </select>
-      <button class="btn" id="btn-export" disabled>⬇ Download</button>
+      <div class="export-group">
+        <select id="export-format" class="btn export-format" disabled>
+          <option value="csv">CSV</option>
+          <option value="xlsx">Excel (.xlsx)</option>
+          <option value="json">JSON</option>
+        </select>
+        <button class="btn export-btn" id="btn-export" disabled>⬇ Download</button>
+      </div>
       
       <span class="muted mono" id="run-note" style="font-size:.72rem;"></span>
+      <span class="upload-chip hidden" id="export-ready-chip">Export ready</span>
 
     </div>
 
@@ -1277,6 +1329,7 @@ btnProcess.addEventListener("click", async () => {
   document.getElementById("filter-row").classList.add("hidden");
   document.getElementById("export-format").disabled = true;
   document.getElementById("btn-export").disabled = true;
+  document.getElementById("export-ready-chip").classList.add("hidden");
   document.getElementById("badge-count").textContent = "…";
   document.getElementById("run-note").textContent = "";
   document.getElementById("leads-out").innerHTML = "";
@@ -1343,9 +1396,11 @@ btnProcess.addEventListener("click", async () => {
           document.getElementById("filter-row").classList.remove("hidden");
           document.getElementById("export-format").disabled = false;
           document.getElementById("btn-export").disabled = false;
+          document.getElementById("export-ready-chip").classList.remove("hidden");
           document.getElementById("run-note").textContent = `${lastLeadRows.length} leads · ${high} high-fit`;
 
           renderLeadsTable();
+          syncExportButtonLabel();
 
           // Wire search
           const searchEl = document.getElementById("lead-search");
@@ -1382,6 +1437,19 @@ document.getElementById("btn-export").addEventListener("click", () => {
     window.location.href = API + "/leads/export-csv";
   }
 });
+
+function syncExportButtonLabel() {
+  const fmt = document.getElementById("export-format")?.value;
+  const btn = document.getElementById("btn-export");
+  if (!btn) return;
+  if (fmt === "xlsx") btn.textContent = "⬇ Download Excel";
+  else if (fmt === "json") btn.textContent = "⬇ Download JSON";
+  else btn.textContent = "⬇ Download CSV";
+}
+
+document.getElementById("export-format").addEventListener("change", syncExportButtonLabel);
+syncExportButtonLabel();
+
 /* ══════════════════════════════════════════════════════════
    CHAT
 ══════════════════════════════════════════════════════════ */
