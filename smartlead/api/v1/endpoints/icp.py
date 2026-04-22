@@ -33,11 +33,6 @@ def read_icp() -> ICP:
     return get_active_icp()
 
 
-@router.get("/state", response_model=ICPStateResponse)
-def read_icp_state() -> ICPStateResponse:
-    return _build_state()
-
-
 @router.get("/templates", response_model=list[IndustryTemplateResponse])
 def read_icp_templates() -> list[IndustryTemplateResponse]:
     return [IndustryTemplateResponse.model_validate(t.model_dump()) for t in get_industry_templates()]

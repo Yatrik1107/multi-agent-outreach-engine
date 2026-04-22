@@ -558,6 +558,105 @@
     .icp-alert { margin-top: .75rem; }
 
     /* ══════════════════════════════════════
+       LEAD GENERATION
+    ══════════════════════════════════════ */
+    .leadgen-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .leadgen-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .6rem;
+    }
+    .leadgen-field label {
+      display: block;
+      font-family: var(--mono);
+      font-size: .66rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text-secondary);
+      margin-bottom: .28rem;
+    }
+    .leadgen-field input {
+      width: 100%;
+      font-family: var(--sans);
+      font-size: .82rem;
+      padding: .45rem .58rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color .14s;
+    }
+    .leadgen-field input:focus {
+      border-color: var(--accent);
+      background: var(--surface);
+    }
+    .leadgen-status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: .68rem;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      margin-bottom: .55rem;
+    }
+    .leadgen-status-chip.running {
+      background: var(--accent-light);
+      color: var(--accent-text);
+      border-color: #bfdbfe;
+    }
+    .leadgen-status-chip.done {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: var(--success-border);
+    }
+    .leadgen-status-chip.error {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-color: var(--danger-border);
+    }
+    .leadgen-status-list {
+      display: grid;
+      gap: .35rem;
+      min-height: 130px;
+      max-height: 210px;
+      overflow-y: auto;
+      padding-right: .2rem;
+    }
+    .leadgen-status-item {
+      font-size: .78rem;
+      color: var(--text-secondary);
+      line-height: 1.45;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .45rem .6rem;
+    }
+    .leadgen-inline-status {
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--text-muted);
+    }
+    .leadgen-source {
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    /* ══════════════════════════════════════
        UTILS
     ══════════════════════════════════════ */
     .hidden { display: none !important; }
@@ -567,6 +666,8 @@
     @media (max-width: 780px) {
       .stats-row { grid-template-columns: 1fr 1fr; }
       .icp-grid  { grid-template-columns: 1fr; }
+      .leadgen-grid { grid-template-columns: 1fr; }
+      .leadgen-form { grid-template-columns: 1fr; }
       .expand-inner { grid-template-columns: 1fr; }
       .editor-grid  { grid-template-columns: 1fr; }
       .agents { flex-direction: column; }
@@ -620,6 +721,7 @@
   </div>
   <div class="topbar-sep"></div>
   <nav class="tabs">
+    <button class="tab-btn" data-panel="leadgen">🧲 Lead Gen</button>
     <button class="tab-btn active" data-panel="leads">
       ⚡ Qualify
       <span class="tab-count" id="badge-count">0</span>
@@ -737,6 +839,79 @@
 
 
   <!-- ═══════════════════════════════════════════
+       LEAD GENERATION PANEL
+  ════════════════════════════════════════════ -->
+  <div class="panel" id="panel-leadgen">
+    <div class="pipeline-card">
+      <div class="pipeline-meta">
+        <span class="pipeline-label">Generate first, then run existing pipeline</span>
+        <span class="pipeline-badge" id="leadgen-badge">idle</span>
+      </div>
+
+      <div class="leadgen-grid">
+        <div class="icp-card">
+          <h3>Generation Inputs</h3>
+          <p class="icp-hint">
+            Use Exa for live mode. In mock mode this returns your fixed demo list.
+          </p>
+          <div class="leadgen-form">
+            <div class="leadgen-field">
+              <label for="leadgen-geo">Geo</label>
+              <input id="leadgen-geo" type="text" value="India" placeholder="India" />
+            </div>
+            <div class="leadgen-field">
+              <label for="leadgen-max-results">Max results</label>
+              <input id="leadgen-max-results" type="number" min="1" max="50" value="20" />
+            </div>
+            <div class="leadgen-field">
+              <label for="leadgen-sector">Sector(s)</label>
+              <input
+                id="leadgen-sector"
+                type="text"
+                value="Software, SaaS"
+                placeholder="Software, SaaS, FinTech"
+              />
+            </div>
+            <div class="leadgen-field">
+              <label for="leadgen-keywords">Keywords (optional)</label>
+              <input id="leadgen-keywords" type="text" value="" placeholder="B2B, automation" />
+            </div>
+          </div>
+
+          <div class="toolbar" style="margin-top:.9rem;margin-bottom:.2rem;">
+            <button class="btn btn-primary" id="btn-leadgen-generate">🧲 Generate Leads</button>
+            <button class="btn btn-accent" id="btn-leadgen-run" disabled>▶ Run Existing Pipeline</button>
+            <span class="upload-chip hidden" id="leadgen-count-chip"></span>
+          </div>
+          <div class="leadgen-inline-status" id="leadgen-inline-status">Idle.</div>
+        </div>
+
+        <div class="icp-card">
+          <h3>Pipeline Status</h3>
+          <p class="icp-hint" id="leadgen-pipeline-status">
+            Waiting for generated leads. Run step 1 first.
+          </p>
+          <div class="leadgen-status-chip" id="leadgen-stage-chip">Waiting</div>
+          <div class="leadgen-status-list" id="leadgen-pipeline-log">
+            <div class="leadgen-status-item">No activity yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="leadgen-alert"></div>
+    </div>
+
+    <div id="leadgen-out">
+      <div class="empty-state">
+        <div class="empty-icon">🧲</div>
+        <div class="empty-title">No generated leads yet</div>
+        <div class="empty-desc">Click Generate Leads, then run the existing pipeline.</div>
+      </div>
+    </div>
+  </div><!-- /panel-leadgen -->
+
+
+  <!-- ═══════════════════════════════════════════
        CHAT PANEL
   ════════════════════════════════════════════ -->
   <div class="panel" id="panel-chat">
@@ -780,7 +955,6 @@
     <div class="icp-toolbar">
       <select class="btn" id="icp-template-select" title="Industry template"></select>
       <button class="btn" id="btn-icp-apply-template">Apply industry defaults</button>
-      <button class="btn btn-primary" id="btn-icp-load">↻ Load current</button>
       <button class="btn btn-accent" id="btn-icp-save">✓ Save ICP</button>
       <button class="btn" id="btn-icp-reset">Reset to default</button>
     </div>
@@ -817,6 +991,7 @@ const API    = "/api/v1";
 const LS_KEY = "smartlead_chat_session_id";
 
 let lastLeadRows       = [];
+let generatedLeadRows  = [];
 let openEditorIndex    = null;    // which row's edit-draft panel is open
 let currentFilter      = "all";
 let mailConfigured     = false;
@@ -840,6 +1015,18 @@ const uploadZone = document.getElementById("upload-zone");
 const csvInput   = document.getElementById("csv-file");
 const fileChip   = document.getElementById("file-chip");
 const btnProcess = document.getElementById("btn-process");
+
+const leadgenGeoInput = document.getElementById("leadgen-geo");
+const leadgenSectorInput = document.getElementById("leadgen-sector");
+const leadgenKeywordsInput = document.getElementById("leadgen-keywords");
+const leadgenMaxResultsInput = document.getElementById("leadgen-max-results");
+const btnLeadgenGenerate = document.getElementById("btn-leadgen-generate");
+const btnLeadgenRun = document.getElementById("btn-leadgen-run");
+const leadgenCountChip = document.getElementById("leadgen-count-chip");
+const leadgenInlineStatus = document.getElementById("leadgen-inline-status");
+const leadgenPipelineStatus = document.getElementById("leadgen-pipeline-status");
+const leadgenPipelineLog = document.getElementById("leadgen-pipeline-log");
+const leadgenStageChip = document.getElementById("leadgen-stage-chip");
 
 uploadZone.addEventListener("dragover",  e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; uploadZone.classList.add("dragover"); });
 uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
@@ -977,6 +1164,168 @@ function parseSseBuffer(buf, onEvent) {
     try { onEvent(JSON.parse(line.replace(/^data:\s*/, ""))); } catch {}
   }
   return rest;
+}
+
+function parseApiDetail(data) {
+  if (!data) return "Request failed.";
+  if (typeof data.detail === "string") return data.detail;
+  if (data.detail && typeof data.detail === "object") return JSON.stringify(data.detail);
+  return JSON.stringify(data);
+}
+
+function normalizePhase(phaseRaw) {
+  let ph = String(phaseRaw || "").toLowerCase();
+  if (ph.includes("score") || ph.includes("scoring") || ph.includes("qualify") || ph.includes("evaluate")) {
+    return "score";
+  }
+  if (ph.includes("research")) return "research";
+  if (ph.includes("outreach") || ph.includes("mail")) return "outreach";
+  return ph;
+}
+
+function setLeadgenBadge(state) {
+  const badge = document.getElementById("leadgen-badge");
+  badge.className = "pipeline-badge";
+  if (state === "running") {
+    badge.classList.add("running");
+    badge.textContent = "running";
+    return;
+  }
+  if (state === "done") {
+    badge.classList.add("done");
+    badge.textContent = "complete";
+    return;
+  }
+  badge.textContent = "idle";
+}
+
+function setLeadgenStage(label, tone = "idle") {
+  if (!leadgenStageChip) return;
+  leadgenStageChip.className = "leadgen-status-chip";
+  if (tone === "running") leadgenStageChip.classList.add("running");
+  if (tone === "done") leadgenStageChip.classList.add("done");
+  if (tone === "error") leadgenStageChip.classList.add("error");
+  leadgenStageChip.textContent = label;
+}
+
+function setLeadgenStatus(text) {
+  if (leadgenPipelineStatus) leadgenPipelineStatus.textContent = text;
+}
+
+function setLeadgenInline(text) {
+  if (leadgenInlineStatus) leadgenInlineStatus.textContent = text;
+}
+
+function appendLeadgenLog(text) {
+  if (!leadgenPipelineLog) return;
+  const clean = String(text || "").trim();
+  if (!clean) return;
+
+  let rows = Array.from(leadgenPipelineLog.querySelectorAll(".leadgen-status-item")).map(el => el.textContent || "").filter(Boolean);
+  if (rows.length === 1 && rows[0] === "No activity yet.") rows = [];
+  rows.push(clean);
+  while (rows.length > 6) rows.shift();
+
+  leadgenPipelineLog.innerHTML = rows.map(row => `<div class="leadgen-status-item">${esc(row)}</div>`).join("");
+  leadgenPipelineLog.scrollTop = leadgenPipelineLog.scrollHeight;
+}
+
+function renderGeneratedLeadsTable() {
+  const out = document.getElementById("leadgen-out");
+  if (!out) return;
+
+  if (!generatedLeadRows.length) {
+    out.innerHTML = `<div class="empty-state"><div class="empty-icon">🧲</div>
+      <div class="empty-title">No generated leads yet</div>
+      <div class="empty-desc">Click Generate Leads, then run the existing pipeline.</div></div>`;
+    return;
+  }
+
+  const rowsHtml = generatedLeadRows.map((row, idx) => {
+    const conf = Math.round(Number(row.confidence || 0) * 100);
+    return `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${esc(row.company_name || "—")}</td>
+        <td>${esc(row.website || "")}</td>
+        <td>${esc(row.contact_email || "")}</td>
+        <td><span class="score-badge ${conf >= 70 ? "high" : conf >= 40 ? "mid" : "low"}">${conf}%</span></td>
+        <td class="leadgen-source">${esc(row.source_query || "mock")}</td>
+      </tr>
+    `;
+  }).join("");
+
+  out.innerHTML = `
+    <div class="table-card">
+      <table class="ltable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Company</th>
+            <th>Website</th>
+            <th>Email</th>
+            <th>Confidence</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function resetPipelineRunUi() {
+  lastLeadRows = [];
+  openEditorIndex = null;
+  document.getElementById("stats-row").classList.add("hidden");
+  document.getElementById("filter-row").classList.add("hidden");
+  document.getElementById("export-format").disabled = true;
+  document.getElementById("btn-export").disabled = true;
+  document.getElementById("export-ready-chip").classList.add("hidden");
+  document.getElementById("badge-count").textContent = "…";
+  document.getElementById("run-note").textContent = "";
+  document.getElementById("leads-out").innerHTML = "";
+
+  setPipelinePhase("research");
+  setProgress(5, "Starting pipeline…");
+}
+
+function finalizePipelineRunUi(ev) {
+  setPipelinePhase("done");
+  setProgress(100, `Done — ${ev.lead_count} lead(s) qualified`);
+  if (ev.errors?.length) showAlert("warn", "Warnings: " + ev.errors.join("; "));
+
+  const scores = lastLeadRows.map(r => Number(r.score?.score ?? 0));
+  const high = scores.filter(s => s >= 70).length;
+  const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+  document.getElementById("st-total").textContent = lastLeadRows.length;
+  document.getElementById("st-high").textContent = high;
+  document.getElementById("st-avg").textContent = avg;
+  document.getElementById("st-emails").textContent = lastLeadRows.filter(r => r.outreach?.body).length;
+  document.getElementById("stats-row").classList.remove("hidden");
+  document.getElementById("filter-row").classList.remove("hidden");
+  document.getElementById("export-format").disabled = false;
+  document.getElementById("btn-export").disabled = false;
+  document.getElementById("export-ready-chip").classList.remove("hidden");
+  document.getElementById("run-note").textContent = `${lastLeadRows.length} leads · ${high} high-fit`;
+
+  renderLeadsTable();
+  syncExportButtonLabel();
+
+  const searchEl = document.getElementById("lead-search");
+  if (searchEl && !searchEl.dataset.bound) {
+    searchEl.addEventListener("input", renderLeadsTable);
+    searchEl.dataset.bound = "1";
+  }
+}
+
+async function refreshMailStatus() {
+  try {
+    const st = await fetch(API + "/leads/outreach-mail-status").then(r => r.json());
+    mailConfigured = !!st.configured;
+    await renderLeadsTable();
+  } catch {}
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1325,19 +1674,7 @@ btnProcess.addEventListener("click", async () => {
   fd.append("file", csvInput.files[0]);
 
   btnProcess.disabled = true;
-  lastLeadRows = [];
-  openEditorIndex = null;
-  document.getElementById("stats-row").classList.add("hidden");
-  document.getElementById("filter-row").classList.add("hidden");
-  document.getElementById("export-format").disabled = true;
-  document.getElementById("btn-export").disabled = true;
-  document.getElementById("export-ready-chip").classList.add("hidden");
-  document.getElementById("badge-count").textContent = "…";
-  document.getElementById("run-note").textContent = "";
-  document.getElementById("leads-out").innerHTML = "";
-
-  setPipelinePhase("research");
-  setProgress(5, "Starting pipeline…");
+  resetPipelineRunUi();
 
   let total = 0;
 
@@ -1359,12 +1696,7 @@ btnProcess.addEventListener("click", async () => {
           setProgress(5, `Processing ${total} lead(s)…`);
         }
         if (ev.event === "step") {
-          let ph = String(ev.phase || "").toLowerCase();
-          
-          // Robustly catch variations in phase names from the backend
-          if (ph.includes("score") || ph.includes("scoring") || ph.includes("qualify") || ph.includes("evaluate")) ph = "score";
-          else if (ph.includes("research")) ph = "research";
-          else if (ph.includes("outreach") || ph.includes("mail")) ph = "outreach";
+          const ph = normalizePhase(ev.phase);
           
           if (ph === "research") setPipelinePhase("research");
           else if (ph === "score") setPipelinePhase("score");
@@ -1382,31 +1714,10 @@ btnProcess.addEventListener("click", async () => {
           document.getElementById("badge-count").textContent = lastLeadRows.length;
         }
         if (ev.event === "complete") {
-          setPipelinePhase("done");
-          setProgress(100, `Done — ${ev.lead_count} lead(s) qualified`);
-          if (ev.errors?.length) showAlert("warn", "Warnings: " + ev.errors.join("; "));
-
-          // Stats
-          const scores = lastLeadRows.map(r => Number(r.score?.score ?? 0));
-          const high   = scores.filter(s => s >= 70).length;
-          const avg    = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
-          document.getElementById("st-total").textContent  = lastLeadRows.length;
-          document.getElementById("st-high").textContent   = high;
-          document.getElementById("st-avg").textContent    = avg;
-          document.getElementById("st-emails").textContent = lastLeadRows.filter(r => r.outreach?.body).length;
-          document.getElementById("stats-row").classList.remove("hidden");
-          document.getElementById("filter-row").classList.remove("hidden");
-          document.getElementById("export-format").disabled = false;
-          document.getElementById("btn-export").disabled = false;
-          document.getElementById("export-ready-chip").classList.remove("hidden");
-          document.getElementById("run-note").textContent = `${lastLeadRows.length} leads · ${high} high-fit`;
-
-          renderLeadsTable();
-          syncExportButtonLabel();
-
-          // Wire search
-          const searchEl = document.getElementById("lead-search");
-          if (searchEl) searchEl.addEventListener("input", renderLeadsTable);
+          finalizePipelineRunUi(ev);
+        }
+        if (ev.event === "error") {
+          showAlert("danger", "Pipeline stream error: " + (ev.message || "unknown error"));
         }
       });
     }
@@ -1417,14 +1728,197 @@ btnProcess.addEventListener("click", async () => {
     hideProgress();
   } finally {
     btnProcess.disabled = false;
+    await refreshMailStatus();
+  }
+});
+
+function activatePanel(panelName) {
+  const tab = document.querySelector(`.tab-btn[data-panel='${panelName}']`);
+  const panel = document.getElementById("panel-" + panelName);
+  if (!tab || !panel) return;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  tab.classList.add("active");
+  panel.classList.add("active");
+}
+
+btnLeadgenGenerate.addEventListener("click", async () => {
+  clearAlerts("leadgen-alert");
+
+  const geo = (leadgenGeoInput?.value || "").trim();
+  const sector = (leadgenSectorInput?.value || "").trim();
+  const keywords = (leadgenKeywordsInput?.value || "").trim();
+  const maxResults = Number(leadgenMaxResultsInput?.value || 20);
+
+  if (!geo || !sector) {
+    showAlert("warn", "Geo and sector are required.", "leadgen-alert");
+    return;
   }
 
-  // Check mail config
+  btnLeadgenGenerate.disabled = true;
+  btnLeadgenRun.disabled = true;
+  setLeadgenBadge("running");
+  setLeadgenStage("Generating Lead Set", "running");
+  setLeadgenInline("Generating leads...");
+  setLeadgenStatus("Submitting lead generation request...");
+  appendLeadgenLog("Lead generation started.");
+
   try {
-    const st = await fetch(API + "/leads/outreach-mail-status").then(r => r.json());
-    mailConfigured = !!st.configured;
-    await renderLeadsTable(); // re-render to enable send buttons if configured
-  } catch {}
+    const res = await fetch(API + "/lead-generation/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        geo,
+        sector,
+        keywords,
+        max_results: maxResults,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(parseApiDetail(data));
+
+    generatedLeadRows = Array.isArray(data.leads) ? data.leads : [];
+    renderGeneratedLeadsTable();
+
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    if (warnings.length) {
+      showAlert("warn", `Generated ${generatedLeadRows.length} lead(s) with warnings: ${warnings.join("; ")}`, "leadgen-alert");
+    } else {
+      showAlert("success", `Generated ${generatedLeadRows.length} lead(s).`, "leadgen-alert");
+    }
+
+    setLeadgenBadge("done");
+    setLeadgenStage("Lead Set Ready", "done");
+    setLeadgenInline(`${generatedLeadRows.length} lead(s) ready.`);
+    setLeadgenStatus("Generation complete. Run Existing Pipeline to qualify these leads.");
+    appendLeadgenLog(`Generated ${generatedLeadRows.length} lead(s).`);
+
+    if (leadgenCountChip) {
+      leadgenCountChip.textContent = `${generatedLeadRows.length} generated`;
+      leadgenCountChip.classList.toggle("hidden", generatedLeadRows.length === 0);
+    }
+
+    btnLeadgenRun.disabled = generatedLeadRows.length === 0;
+  } catch (e) {
+    generatedLeadRows = [];
+    renderGeneratedLeadsTable();
+    setLeadgenBadge("idle");
+    setLeadgenStage("Generation Failed", "error");
+    setLeadgenInline("Generation failed.");
+    setLeadgenStatus("Generation failed. Check inputs or provider configuration.");
+    appendLeadgenLog("Generation failed.");
+    showAlert("danger", String(e), "leadgen-alert");
+    if (leadgenCountChip) leadgenCountChip.classList.add("hidden");
+  } finally {
+    btnLeadgenGenerate.disabled = false;
+  }
+});
+
+btnLeadgenRun.addEventListener("click", async () => {
+  clearAlerts();
+  clearAlerts("leadgen-alert");
+  if (!generatedLeadRows.length) {
+    showAlert("warn", "Generate leads first.", "leadgen-alert");
+    return;
+  }
+
+  btnLeadgenGenerate.disabled = true;
+  btnLeadgenRun.disabled = true;
+  btnProcess.disabled = true;
+
+  setLeadgenBadge("running");
+  setLeadgenStage("Starting Pipeline", "running");
+  setLeadgenInline("Pipeline in progress...");
+  setLeadgenStatus("Booting existing multi-agent pipeline...");
+  appendLeadgenLog("Running existing pipeline on generated leads.");
+
+  resetPipelineRunUi();
+
+  let total = 0;
+  try {
+    const res = await fetch(API + "/lead-generation/run-pipeline-stream", { method: "POST" });
+    if (!res.ok || !res.body) throw new Error((await res.text()) || "Pipeline stream failed");
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+
+      buf = parseSseBuffer(buf, ev => {
+        if (ev.event === "start") {
+          total = Number(ev.total || 0);
+          setLeadgenStage("Research Agent Active", "running");
+          setLeadgenStatus(`Started processing ${total} lead(s).`);
+          appendLeadgenLog(`Pipeline started for ${total} lead(s).`);
+          setProgress(5, `Processing ${total} lead(s)…`);
+        }
+
+        if (ev.event === "step") {
+          const ph = normalizePhase(ev.phase);
+          if (ph === "research") setPipelinePhase("research");
+          else if (ph === "score") setPipelinePhase("score");
+          else if (ph === "outreach") setPipelinePhase("outreach");
+
+          if (ph === "research") setLeadgenStage("Research Agent Active", "running");
+          else if (ph === "score") setLeadgenStage("Scoring Agent Active", "running");
+          else if (ph === "outreach") setLeadgenStage("Outreach Agent Active", "running");
+
+          if (ev.company && ["research", "score", "outreach"].includes(ph)) {
+            setAgentSub(ph, `${ev.company} (${ev.index}/${ev.total})`);
+          }
+
+          const pct = total ? Math.round((ev.index / total) * 88) + 5 : 50;
+          const stepMsg = ev.message || `${ev.phase} · ${ev.company} · ${ev.index}/${ev.total}`;
+          setProgress(pct, stepMsg);
+          setLeadgenStatus(stepMsg);
+          appendLeadgenLog(stepMsg);
+        }
+
+        if (ev.event === "lead") {
+          lastLeadRows.push(ev.data);
+          document.getElementById("badge-count").textContent = lastLeadRows.length;
+        }
+
+        if (ev.event === "complete") {
+          finalizePipelineRunUi(ev);
+          setLeadgenBadge("done");
+          setLeadgenStage("Pipeline Complete", "done");
+          setLeadgenInline(`Completed ${ev.lead_count} lead(s).`);
+          setLeadgenStatus("Pipeline complete. Open the Qualify tab for full editing/export actions.");
+          appendLeadgenLog(`Completed ${ev.lead_count} qualified lead(s).`);
+          activatePanel("leads");
+        }
+
+        if (ev.event === "error") {
+          setLeadgenBadge("idle");
+          setLeadgenStage("Pipeline Error", "error");
+          setLeadgenInline("Pipeline failed.");
+          setLeadgenStatus("Pipeline error occurred. Check details below.");
+          appendLeadgenLog("Pipeline error occurred.");
+          showAlert("danger", "Pipeline stream error: " + (ev.message || "unknown error"), "leadgen-alert");
+        }
+      });
+    }
+  } catch (e) {
+    setPipelinePhase("idle");
+    hideProgress();
+    setLeadgenBadge("idle");
+    setLeadgenStage("Pipeline Failed", "error");
+    setLeadgenInline("Pipeline failed.");
+    setLeadgenStatus("Pipeline run failed before completion.");
+    appendLeadgenLog("Pipeline failed before completion.");
+    showAlert("danger", "Pipeline failed: " + String(e), "leadgen-alert");
+  } finally {
+    btnLeadgenGenerate.disabled = false;
+    btnLeadgenRun.disabled = generatedLeadRows.length === 0;
+    btnProcess.disabled = !csvInput.files?.[0];
+    await refreshMailStatus();
+  }
 });
 
 document.getElementById("btn-export").addEventListener("click", () => {
@@ -1636,15 +2130,17 @@ async function loadIcp() {
   document.getElementById("icp-alert").innerHTML = "";
   try {
     await loadIcpTemplates();
-    const res  = await fetch(API + "/icp/state");
+    const res  = await fetch(API + "/icp");
     const data = await res.json();
     if (!res.ok) throw new Error(JSON.stringify(data));
-    fillIcpForm(parseIcpPayload(data));
-    showAlert("success","ICP loaded.","icp-alert");
+    fillIcpForm(parseIcpPayload({
+      active_template_id: document.getElementById("icp-template-select").value,
+      target_industries: data.target_industries || [],
+      keywords: data.keywords || [],
+      notes: data.notes || "",
+    }));
   } catch (e) { showAlert("danger", String(e), "icp-alert"); }
 }
-
-document.getElementById("btn-icp-load").addEventListener("click", loadIcp);
 
 document.getElementById("btn-icp-apply-template").addEventListener("click", async () => {
   document.getElementById("icp-alert").innerHTML = "";

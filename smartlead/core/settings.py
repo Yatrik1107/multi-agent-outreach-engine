@@ -48,6 +48,19 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("TAVILY_API_KEY"),
     )
+
+    # --- Exa (lead generation) ---
+    exa_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("EXA_API_KEY"),
+    )
+
+    # Lead generation tuning (POC defaults)
+    leadgen_max_results_cap: int = 50
+    leadgen_per_query_results: int = 10
+    leadgen_max_queries: int = 8
+    leadgen_request_timeout_seconds: int = 20
+    leadgen_enable_email_discovery: bool = True
     
     # Sign-off for outreach emails (optional).
     outreach_sender_name: str = ""
