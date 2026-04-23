@@ -23,19 +23,26 @@ _NON_COMPANY_HOST_KEYWORDS = (
     "crunchbase.com",
     "linkedin.com",
     "medium.com",
+    "exportersindia.com",
+    "4allbiz.in",
+    "justdial.com",
+    "sulekha.com",
+    "indiamart.com",
+    "tradeindia.com",
 )
 
 _NON_COMPANY_NAME_RE = re.compile(
-    r"\b(top|best|list|report|guide|overview|market|industry|companies|startups)\b",
+    r"\b(top|best|list|report|guide|overview|market|industry|companies|startups|"
+    r"directory|manufacturers|suppliers|exporters|dealers|wholesalers)\b",
     flags=re.IGNORECASE,
 )
 
 _INTENT_TERMS: tuple[str, ...] = (
-    "companies",
-    "B2B companies",
-    "software companies",
-    "enterprise vendors",
-    "product companies",
+    "company",
+    "manufacturers",
+    "service providers",
+    "suppliers",
+    "official website",
 )
 
 
@@ -57,46 +64,71 @@ class _SearchRow:
     source_query: str
     confidence_hint: float
 
+def _split_geo_terms(value: str) -> list[str]:
+    # Geo input is expected as comma-separated values: "ahmedabad, vadodara, vapi"
+    return [v.strip() for v in (value or "").split(",") if v.strip()]
 
 def _split_csv_terms(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
 def build_queries(geo: str, sector: str, keywords: str = "", *, max_queries: int = 8) -> list[str]:
-    geo_clean = " ".join((geo or "").split()).strip()
+    geos = _split_geo_terms(geo)
     sectors = _split_csv_terms(sector)
     extra = _split_csv_terms(keywords)
 
+    if not geos:
+        fallback_geo = " ".join((geo or "").split()).strip()
+        geos = [fallback_geo] if fallback_geo else []
+
     if not sectors:
-        sectors = [sector.strip()] if sector.strip() else []
+        fallback_sector = " ".join((sector or "").split()).strip()
+        sectors = [fallback_sector] if fallback_sector else []
 
-    base_queries: list[str] = []
-    for sector_clean in sectors:
-        for term in _INTENT_TERMS:
-            base_queries.append(f"{sector_clean} {term} in {geo_clean}")
-        base_queries.append(f"official websites of {sector_clean} companies in {geo_clean}")
+    if not geos or not sectors:
+        return []
 
-    for token in extra:
-        for sector_clean in sectors:
-            base_queries.append(f"{sector_clean} companies {geo_clean} {token}")
+    # Build pools so we can interleave and avoid spending all query budget on one sector/city.
+    base_pool: list[str] = []
+    keyword_pool: list[str] = []
+    broad_pool: list[str] = []
 
-    if len(sectors) > 1:
-        base_queries.append(f"{', '.join(sectors)} companies in {geo_clean}")
+    for s in sectors:
+        for g in geos:
+            for term in _INTENT_TERMS:
+                base_pool.append(f"{s} {term} {g}")
+            broad_pool.append(f"{s} companies in {g}")
+            broad_pool.append(f"{s} official website {g}")
 
+    for s in sectors:
+        for g in geos:
+            for k in extra:
+                keyword_pool.append(f"{s} {k} {g}")
+                keyword_pool.append(f"{s} company {k} {g}")
+
+    # Interleave pools: base -> keyword -> broad
     out: list[str] = []
     seen: set[str] = set()
-    for row in base_queries:
-        q = " ".join(row.split())
-        key = q.lower()
-        if not q or key in seen:
-            continue
-        seen.add(key)
-        out.append(q)
+
+    def push(q: str) -> None:
+        qn = " ".join(q.split()).strip()
+        key = qn.lower()
+        if qn and key not in seen:
+            seen.add(key)
+            out.append(qn)
+
+    max_len = max(len(base_pool), len(keyword_pool), len(broad_pool))
+    for i in range(max_len):
+        if i < len(base_pool):
+            push(base_pool[i])
+        if i < len(keyword_pool):
+            push(keyword_pool[i])
+        if i < len(broad_pool):
+            push(broad_pool[i])
         if len(out) >= max_queries:
             break
 
-    return out
-
+    return out[:max_queries]
 
 def normalize_website(url: str) -> str:
     raw = (url or "").strip()

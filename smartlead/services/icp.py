@@ -479,6 +479,51 @@ def _fmcg_default_icp() -> ICP:
         ),
     )
 
+def _pharma_default_icp() -> ICP:
+    return ICP(
+        target_industries=[
+            "Pharmaceuticals",
+            "Biotechnology",
+            "Life Sciences",
+            "Clinical Research",
+            "Medical Devices",
+            "CRO",
+            "CDMO",
+        ],
+        keywords=[
+            "clinical trials",
+            "regulatory compliance",
+            "FDA",
+            "CDSCO",
+            "GxP",
+            "pharmacovigilance",
+            "drug development",
+            "R&D",
+            "quality systems",
+            "validation",
+            "batch tracking",
+            "serialization",
+            "supply chain compliance",
+            "lab data",
+        ],
+        notes=(
+            "Ideal customers are pharma and life sciences organizations managing complex, "
+            "regulated workflows across R&D, manufacturing, and commercialization.\n\n"
+            "Strong signals:\n"
+            "- Active clinical, regulatory, or quality workflows\n"
+            "- Compliance-heavy systems (GxP, audit trails, validation)\n"
+            "- Data fragmentation across R&D, manufacturing, and supply chain\n\n"
+            "Moderate signals:\n"
+            "- Partial digitization of lab, quality, or regulatory processes\n"
+            "- Manual documentation and reporting workflows\n\n"
+            "Weak signals:\n"
+            "- Small distributors with no regulatory complexity\n"
+            "- Minimal digital systems beyond basic ERP\n\n"
+            "Disqualifiers:\n"
+            "- No regulated workflows\n"
+            "- No R&D, manufacturing, or compliance complexity"
+        ),
+    )
 
 def get_industry_templates() -> list[IndustryTemplate]:
     return [
@@ -537,10 +582,10 @@ def get_industry_templates() -> list[IndustryTemplate]:
             icp=_professional_services_default_icp(),
         ),
         IndustryTemplate(
-            id="fmcg",
-            label="FMCG",
-            description="Consumer goods and high-volume retail distribution organizations.",
-            icp=_fmcg_default_icp(),
+            id="pharma",
+            label="Pharma",
+            description="Pharmaceutical, biotechnology, and regulated life sciences organizations.",
+            icp=_pharma_default_icp(),
         ),
     ]
 

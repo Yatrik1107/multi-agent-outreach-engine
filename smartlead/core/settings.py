@@ -21,7 +21,17 @@ class Settings(BaseSettings):
 
     # "gemini" | "openai" | "grok" (case-insensitive). Controls which API key is required when USE_MOCK_LLM=false.
     llm_provider: str = "gemini"
+    
+    # "google" | "openai" | "exa" | "tavily" (case-insensitive). Controls which lead generation engine is used.
+    leadgen_provider: str = "google"
 
+    # Google grounding model used by the lead-generation provider.
+    google_search_grounding_model: str = "gemini-2.5-flash"
+    # Fallback model list (comma-separated) used if grounding model quota is exhausted.
+    google_search_grounding_fallback_models: str = "gemini-2.5"
+    # Safety cap for Google grounding query fan-out to reduce free-tier quota burn.
+    google_grounding_max_queries_cap: int = 6
+    
     # --- Google Gemini ---
     gemini_api_key: str | None = Field(
         default=None,
@@ -36,6 +46,8 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENAI_API_KEY", "OPENAPI_API_KEY"),
     )
     openai_model: str = "gpt-4o-mini"
+    # Model used by OpenAI-based lead generation/search.
+    openai_search_model: str = "gpt-5-nano"
     
     # --- xAI Grok (optional LLM; OpenAI-compatible base URL) ---
     grok_api_key: str | None = Field(
@@ -58,7 +70,7 @@ class Settings(BaseSettings):
     # Lead generation tuning (POC defaults)
     leadgen_max_results_cap: int = 50
     leadgen_per_query_results: int = 10
-    leadgen_max_queries: int = 8
+    leadgen_max_queries: int = 24
     leadgen_request_timeout_seconds: int = 20
     leadgen_enable_email_discovery: bool = True
     
@@ -80,6 +92,9 @@ class Settings(BaseSettings):
 
     def _provider_normalized(self) -> str:
         return (self.llm_provider or "gemini").strip().lower()
+    
+    def _leadgen_provider_normalized(self) -> str:
+        return (self.leadgen_provider or "google").strip().lower()
 
     @property
     def has_active_llm_credentials(self) -> bool:
@@ -90,6 +105,19 @@ class Settings(BaseSettings):
             return bool((self.gemini_api_key or "").strip())
         if p == "grok":
             return bool((self.grok_api_key or "").strip())
+        return False
+    
+    @property
+    def has_active_leadgen_credentials(self) -> bool:
+        p = self._leadgen_provider_normalized()
+        if p == "google":
+            return bool((self.gemini_api_key or "").strip())
+        if p == "openai":
+            return bool((self.openai_api_key or "").strip())
+        if p == "exa":
+            return bool((self.exa_api_key or "").strip())
+        if p == "tavily":
+            return bool((self.tavily_api_key or "").strip())
         return False
 
     @property
@@ -135,6 +163,27 @@ class Settings(BaseSettings):
         return (
             f"Unknown LLM_PROVIDER={self.llm_provider!r}. Use 'gemini', 'openai', or 'grok'. "
             "Or set USE_MOCK_LLM=true."
+        )
+
+    def leadgen_config_error_detail(self) -> str:
+        p = self._leadgen_provider_normalized()
+        if p == "google":
+            return (
+                "LEADGEN_PROVIDER=google requires GEMINI_API_KEY or GOOGLE_API_KEY "
+                "and GOOGLE_SEARCH_GROUNDING_MODEL."
+            )
+        if p == "openai":
+            return (
+                "LEADGEN_PROVIDER=openai requires OPENAI_API_KEY (or OPENAPI_API_KEY) "
+                "and OPENAI_SEARCH_MODEL."
+            )
+        if p == "exa":
+            return "LEADGEN_PROVIDER=exa requires EXA_API_KEY."
+        if p == "tavily":
+            return "LEADGEN_PROVIDER=tavily requires TAVILY_API_KEY."
+        return (
+            f"Unknown LEADGEN_PROVIDER={self.leadgen_provider!r}. "
+            "Use 'google', 'openai', 'exa', or 'tavily'."
         )
         
     @property

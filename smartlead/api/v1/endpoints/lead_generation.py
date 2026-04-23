@@ -18,7 +18,7 @@ from smartlead.services.generated_leads_store import (
     set_generated_leads,
 )
 from smartlead.services.icp_store import get_active_icp
-from smartlead.services.lead_generation import ExaLeadGeneratorService
+from smartlead.services.leadgen_factory import get_lead_generator
 from smartlead.services.pipeline import iter_pipeline_events, run_pipeline
 from smartlead.services.pipeline_context import set_last_lead_results
 
@@ -33,6 +33,18 @@ _MOCK_GENERATED_LEADS: list[tuple[str, str, str]] = [
     ("Wipro", "https://www.techmahindra.com/", "info@wipro.com"),
     ("Amul", "https://amul.com/", "gcmmf@amul.coop"),
 ]
+
+_QUOTA_WARNING_TOKENS = (
+    "quota exhausted",
+    "quota exceeded",
+    "resource_exhausted",
+    "generate_content_free_tier_requests",
+)
+
+
+def _is_quota_warning(msg: str) -> bool:
+    low = (msg or "").lower()
+    return any(token in low for token in _QUOTA_WARNING_TOKENS)
 
 
 def _sse(data: dict) -> str:
@@ -78,13 +90,17 @@ def generate_leads(
             generated_count=len(payload),
         )
 
-    if not (settings.exa_api_key or "").strip():
+    if not settings.has_active_leadgen_credentials:
         raise HTTPException(
             status_code=503,
-            detail="EXA_API_KEY is required for lead generation.",
+            detail=settings.leadgen_config_error_detail(),
         )
 
-    service = ExaLeadGeneratorService(settings)
+    try:
+        service = get_lead_generator(settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
     try:
         generated, lead_inputs, warnings = service.generate(
             geo=body.geo,
@@ -105,6 +121,9 @@ def generate_leads(
             status_code=400,
             detail={"message": "No leads generated.", "warnings": warnings},
         )
+
+    # If we successfully generated leads, suppress quota noise in user-facing warnings.
+    warnings = [w for w in warnings if not _is_quota_warning(w)]
 
     set_generated_leads(lead_inputs, warnings)
 
