@@ -2,11 +2,8 @@
 
 A lightweight multi-agent sales intelligence POC built with **FastAPI** that helps teams go from a raw lead list to a prioritized, personalized outreach workflow.
 
-<p align="center">
-	<video src="Demo Video/Lead Generation And Outreach Engine.mp4" controls style="max-width:100%; height:auto;">
-		Your browser does not support the video tag. You can download the demo from the repository: [Demo Video/Lead Generation And Outreach Engine.mp4](Demo Video/Lead Generation And Outreach Engine.mp4)
-	</video>
-</p>
+> Demo video: [Watch the walkthrough](Demo%20Video/Lead%20Generation%20And%20Outreach%20Engine.mp4)
+
 
 This system ingests CSV/XLSX/XLS lead lists, researches each lead, scores fit against a configurable Ideal Customer Profile (ICP), drafts personalized outreach, and provides a human-in-the-loop UI for review, export, and send.
 
