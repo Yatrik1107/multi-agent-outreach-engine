@@ -2,7 +2,13 @@
 
 A lightweight multi-agent sales intelligence POC built with **FastAPI** that helps teams go from a raw lead list to a prioritized, personalized outreach workflow.
 
-This system takes a CSV,XLSX, or XLS of companies, researches each lead, scores it against an Ideal Customer Profile (ICP), drafts personalized outreach, and lets a human review/edit before export or send.
+<p align="center">
+	<video src="Demo Video/Lead Generation And Outreach Engine.mp4" controls style="max-width:100%; height:auto;">
+		Your browser does not support the video tag. You can download the demo from the repository: [Demo Video/Lead Generation And Outreach Engine.mp4](Demo Video/Lead Generation And Outreach Engine.mp4)
+	</video>
+</p>
+
+This system ingests CSV/XLSX/XLS lead lists, researches each lead, scores fit against a configurable Ideal Customer Profile (ICP), drafts personalized outreach, and provides a human-in-the-loop UI for review, export, and send.
 
 ---
 
@@ -232,5 +238,95 @@ SmartLeadEngine/
 │       ├── helpers.py
 │       └── __init__.py
 ├── test_leads_alt.csv
-├── test_leads.csv
-└── test_real_data.csv
+└── test_leads.csv
+
+---
+
+## Quickstart (local, development)
+
+1. Create and activate a virtual environment (optional but recommended):
+
+```bash
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
+```
+
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Run the app (development):
+
+```bash
+uvicorn smartlead.main:app --reload
+```
+
+4. Open the UI at http://127.0.0.1:8000/
+
+Notes:
+- The demo defaults to `USE_MOCK_LLM=true` (no external LLM calls). See [smartlead/core/settings.py](smartlead/core/settings.py) for full options.
+- To use a live LLM, set `USE_MOCK_LLM=false` and provide credentials for `LLM_PROVIDER` (`gemini`, `openai`, or `grok`).
+
+---
+
+## Configuration
+
+Configuration is driven by environment variables and the `Settings` class in [smartlead/core/settings.py](smartlead/core/settings.py).
+
+- `USE_MOCK_LLM` — `true|false` (default `true`) to use demo/mock LLM outputs.
+- `LLM_PROVIDER` — `gemini|openai|grok` (set corresponding API keys in env).
+- `LEADGEN_PROVIDER` — `google|openai|exa|tavily` (controls lead-generation backend).
+- SMTP: set `SENDER_EMAIL` and `GMAIL_SMTP_KEY` (if using Gmail app password) to enable send.
+
+Refer to the `Settings` class for additional tunables (leadgen caps, grounding model, discovery options).
+
+---
+
+## Dependencies
+
+Core dependencies are listed in [`requirements.txt`](requirements.txt). Highlights:
+
+- `fastapi`, `uvicorn`
+- `google-genai`, `openai`, `grok` wrappers (optional)
+- `openpyxl`, `xlrd` for Excel handling
+- `tavily-python`, `exa-py` for additional lead generation backends
+
+---
+
+## API & Usage
+
+The FastAPI app exposes a versioned router at `/api/v1` (see [smartlead/api/v1/router.py](smartlead/api/v1/router.py)).
+
+Examples:
+
+- Health: `GET /api/v1/health`
+- Upload leads: `POST /api/v1/leads/upload` (multipart file upload)
+- List processed leads: `GET /api/v1/leads`
+- Chat assistant: `POST /api/v1/chat`
+
+Use the UI at `/` to perform uploads, run the pipeline, review/edit drafts, and export or send.
+
+---
+
+## Demo video
+
+The demo video included with the repo is at:
+
+- [Demo Video/Lead Generation And Outreach Engine.mp4](Demo Video/Lead Generation And Outreach Engine.mp4)
+
+Play it directly in this README (top of file) or download it to view locally.
+
+---
+
+## Credits
+
+- Demo & project: Yatrik Patel
+- Demo video included in the repository: [Demo Video/Lead Generation And Outreach Engine.mp4]
+- Questions, issues, or contributions: please open an issue or submit a pull request.
+
+---
